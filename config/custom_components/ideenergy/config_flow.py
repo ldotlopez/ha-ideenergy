@@ -4,14 +4,18 @@ from __future__ import annotations
 import logging
 from typing import Any
 
+from aiohttp import ClientSession
+import ideenergy
 import voluptuous as vol
 
 from homeassistant import config_entries
 from homeassistant.core import HomeAssistant
 from homeassistant.data_entry_flow import FlowResult
 from homeassistant.exceptions import HomeAssistantError
+from homeassistant.helpers.aiohttp_client import async_create_clientsession
 
 from .const import DOMAIN
+
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -23,15 +27,22 @@ STEP_USER_DATA_SCHEMA = vol.Schema(
     }
 )
 
-
 class IDEEnergyHub:
     """Placeholder class to make tests pass.
 
+
     TODO Remove this placeholder class and replace with things from your PyPI package.
     """
+    def __init__(self, sess: ClientSession):
+        self.sess = sess
+
     async def authenticate(self, username: str, password: str) -> bool:
-        import ipdb; ipdb.set_trace(); pass
-        """Test if we can authenticate with the host."""
+        api = ideenergy.Client(self.sess, username, password, logger=_LOGGER.getChild('client'))
+        try:
+            await api.login()
+        except ideenergy.LoginFailed:
+            return False
+
         return True
 
 
@@ -48,15 +59,16 @@ async def validate_input(hass: HomeAssistant, data: dict[str, Any]) -> dict[str,
     #     your_validate_func, data["username"], data["password"]
     # )
 
-    hub = IDEEnergyHub()
-
-    if not await hub.authenticate(data["username"], data["password"]):
-        raise InvalidAuth
+    sess = async_create_clientsession(hass)
+    hub = IDEEnergyHub(sess)
 
     # If you cannot connect:
     # throw CannotConnect
     # If the authentication is wrong:
     # InvalidAuth
+
+    if not await hub.authenticate(data["username"], data["password"]):
+        raise InvalidAuth()
 
     # Return info that you want to store in the config entry.
     return {"title": "ideenergy"}
