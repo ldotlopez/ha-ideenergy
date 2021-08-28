@@ -2,14 +2,14 @@
   "domain": "ideenergy",
   "name": "i-de.es consumption energy sensor",
   "config_flow": true,
-  "documentation": "https://github.com/ldotlopez/homeassistant-ideenergy",
+  "documentation": "https://github.com/ldotlopez/ha-ideenergy",
   "requirements": [
-    "ideenergy==0.0.2"
+    "ideenergy==0.0.3"
   ],
   "dependencies": [],
   "codeowners": [
     "@ldotlopez"
   ],
   "iot_class": "cloud_polling",
-  "version": "0.0.2"
+  "version": "0.0.3"
 }
