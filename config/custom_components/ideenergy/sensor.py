@@ -31,7 +31,7 @@ import ideenergy
 from homeassistant.components.sensor import (
     ATTR_LAST_RESET,
     ATTR_STATE_CLASS,
-    STATE_CLASS_MEASUREMENT,
+    STATE_CLASS_TOTAL_INCREASING,
 )
 from homeassistant.const import DEVICE_CLASS_ENERGY, ENERGY_KILO_WATT_HOUR
 from homeassistant.core import callback
@@ -195,4 +195,4 @@ class IDEEnergyAccumulateSensor(RestoreEntity, Entity):
 
     @property
     def state_class(self):
-        return STATE_CLASS_MEASUREMENT
+        return STATE_CLASS_TOTAL_INCREASING
