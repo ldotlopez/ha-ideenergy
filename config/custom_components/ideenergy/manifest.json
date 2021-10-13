@@ -4,12 +4,12 @@
   "config_flow": true,
   "documentation": "https://github.com/ldotlopez/ha-ideenergy",
   "requirements": [
-    "ideenergy==0.0.3"
+    "ideenergy>=0.0.4.20210929.1"
   ],
   "dependencies": [],
   "codeowners": [
     "@ldotlopez"
   ],
   "iot_class": "cloud_polling",
-  "version": "0.0.3"
+  "version": "0.0.4.20210929.1"
 }
