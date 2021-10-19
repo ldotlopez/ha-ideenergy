@@ -21,6 +21,7 @@
 
 import random
 from datetime import timedelta
+from typing import Optional
 
 import ideenergy
 from homeassistant.components.sensor import (
@@ -158,7 +159,7 @@ class IDEEnergyAccumulateSensor(RestoreEntity, Entity):
         return self._name
 
     @property
-    def unique_id(self) -> str | None:
+    def unique_id(self) -> Optional[str]:
         """Return a unique ID."""
         return self._unique_id
 
