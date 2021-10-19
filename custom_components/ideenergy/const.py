@@ -19,9 +19,10 @@
 # USA.
 
 
-"""Constants for the i-de.es sensor integration."""
-
 DOMAIN = "ideenergy"
+PLATFORMS = ["sensor"]
+DEFAULT_NAME = "ICP"
+
 UPDATE_BARRIER_MINUTE_MIN = 55
 UPDATE_BARRIER_MINUTE_MAX = 59
 STATE_MAX_AGE = 60 * 60

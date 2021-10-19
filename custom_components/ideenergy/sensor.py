@@ -19,30 +19,30 @@
 # USA.
 
 
-"""Platform for sensor integration."""
-
-
 import random
-from datetime import datetime, timedelta
+from datetime import timedelta
 
 import ideenergy
-
-
 from homeassistant.components.sensor import (
     ATTR_LAST_RESET,
     ATTR_STATE_CLASS,
     STATE_CLASS_TOTAL_INCREASING,
 )
+from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import DEVICE_CLASS_ENERGY, ENERGY_KILO_WATT_HOUR
+from homeassistant.core import HomeAssistant
+
 # Maybe we need to mark some function as callback but I'm not sure whose.
 # from homeassistant.core import callback
 from homeassistant.helpers.entity import Entity
+from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.event import async_track_time_change
 from homeassistant.helpers.restore_state import RestoreEntity
 from homeassistant.util import dt
 
 from . import _LOGGER
 from .const import (
+    DEFAULT_NAME,
     DOMAIN,
     STATE_MAX_AGE,
     UPDATE_BARRIER_MINUTE_MAX,
@@ -50,13 +50,16 @@ from .const import (
 )
 
 
-async def async_setup_entry(hass, config_entry, async_add_entities):
-    """Set up the sensor platform."""
+async def async_setup_entry(
+    hass: HomeAssistant,
+    config_entry: ConfigEntry,
+    async_add_entities: AddEntitiesCallback,
+) -> None:
     sensors = [
         IDEEnergyAccumulateSensor(
-            hass.data[DOMAIN][config_entry.entry_id],
-            name="consumed",
-            key="accumulate",
+            name=DEFAULT_NAME,
+            api=hass.data[DOMAIN][config_entry.entry_id],
+            unique_id=config_entry.unique_id,
         )
     ]
 
@@ -64,9 +67,11 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
 
 
 class IDEEnergyAccumulateSensor(RestoreEntity, Entity):
-    def __init__(self, api, name, key):
-        self._state = None
+    def __init__(self, name, api, unique_id):
+        self._name = name
         self._api = api
+        self._unique_id = unique_id
+        self._state = None
         self._unsub_sched_update = None
 
     async def async_added_to_hass(self) -> None:
@@ -82,7 +87,10 @@ class IDEEnergyAccumulateSensor(RestoreEntity, Entity):
         else:
             try:
                 self._state = float(state.state)
-                _LOGGER.debug(f"Restored previous state: {self._state} {ENERGY_KILO_WATT_HOUR}")
+                _LOGGER.debug(
+                    f"Restored previous state: "
+                    f"{self._state} {ENERGY_KILO_WATT_HOUR}"
+                )
 
                 if (
                     dt.now() - state.last_updated
@@ -100,34 +108,6 @@ class IDEEnergyAccumulateSensor(RestoreEntity, Entity):
             self.async_schedule_update_ha_state(force_refresh=True)
 
         self.schedule_next_update()
-
-    # async def async_added_to_hass(self) -> None:
-    #     state = await self.async_get_last_state()
-
-    #     if not state:
-    #         _LOGGER.debug("No previous state, force refresh and update")
-    #         self.async_schedule_update_ha_state(force_refresh=True)
-
-    #     else:
-    #         try:
-    #             self._state = float(state.state)
-    #             _LOGGER.debug(f"Restored previous state: {self._state} {ENERGY_KILO_WATT_HOUR}")
-
-    #             if (
-    #                 dt.now() - state.last_updated
-    #             ).total_seconds() > STATE_MAX_AGE:
-    #                 _LOGGER.debug(
-    #                     "Previous state is too old, scheduling update"
-    #                 )
-    #                 self.async_schedule_update_ha_state(force_refresh=True)
-
-    #         except ValueError:
-    #             _LOGGER.debug(
-    #                 "Invalid previous state, force refresh and update"
-    #             )
-    #             self.async_schedule_update_ha_state(force_refresh=True)
-
-    #     self.schedule_next_update()
 
     def schedule_next_update(self):
         if self._unsub_sched_update:
@@ -158,33 +138,12 @@ class IDEEnergyAccumulateSensor(RestoreEntity, Entity):
             second=[next_update.second],
         )
 
-    # def _schedule_next_update(self):
-    #     if self._unsub_sched_update:
-    #         _LOGGER.debug("Remove previous track task")
-    #         self._unsub_sched_update()
-    #         self._unsub_sched_update = None
-
-    #     next_second = random.randrange(20, 59)
-    #     delta = timedelta(seconds=next_second)
-
-    #     now = datetime.now()
-    #     next_update = now + delta
-
-    #     _LOGGER.debug(
-    #         f"Updating sensor in {delta.total_seconds()} secs (now: {now}) (update: {next_update})"
-    #     )
-
-    #     self._unsub_sched_update = async_track_time_change(
-    #         self.hass, self.do_scheduled_update, second=[next_update.second]
-    #     )
-
     async def do_scheduled_update(self, now):
         self.async_schedule_update_ha_state(force_refresh=True)
         self.schedule_next_update()
 
     async def async_update(self):
         try:
-            await self._api.login()
             measure = await self._api.get_measure()
         except ideenergy.ClientError as e:
             _LOGGER.error(f"Error reading measure: {e}")
@@ -194,8 +153,14 @@ class IDEEnergyAccumulateSensor(RestoreEntity, Entity):
         _LOGGER.info(f"State updated: {self.state} {ENERGY_KILO_WATT_HOUR}")
 
     @property
-    def name(self):
-        return "IDEEnergy consumed energy"
+    def name(self) -> str:
+        """Return the name of the sensor."""
+        return self._name
+
+    @property
+    def unique_id(self) -> str | None:
+        """Return a unique ID."""
+        return self._unique_id
 
     @property
     def state(self):

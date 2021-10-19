@@ -47,7 +47,12 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     sess = async_get_clientsession(hass)
     hass.data[DOMAIN] = hass.data.get(DOMAIN, {})
-    hass.data[DOMAIN][entry.entry_id] = ideenergy.Client(sess, entry.data[CONF_USERNAME], entry.data[CONF_PASSWORD], logger=_LOGGER.getChild('client'))
+    hass.data[DOMAIN][entry.entry_id] = ideenergy.Client(
+        sess,
+        entry.data[CONF_USERNAME],
+        entry.data[CONF_PASSWORD],
+        logger=_LOGGER.getChild("client"),
+    )
     hass.config_entries.async_setup_platforms(entry, PLATFORMS)
 
     return True
@@ -55,7 +60,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Unload a config entry."""
-    unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
+    unload_ok = await hass.config_entries.async_unload_platforms(
+        entry, PLATFORMS
+    )
     if unload_ok:
         hass.data[DOMAIN].pop(entry.entry_id)
 
