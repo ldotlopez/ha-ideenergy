@@ -1,8 +1,7 @@
-
-# Configure a default setup of Home Assistant (frontend, api, etc)
 default_config:
 
 logger:
   default: warning
   logs:
+    ideenergy: debug
     custom_components.ideenergy: debug

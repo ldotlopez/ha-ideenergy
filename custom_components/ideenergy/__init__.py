@@ -1,6 +1,5 @@
-#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-
+#
 # Copyright (C) 2021 Luis López <luis@cuarentaydos.com>
 #
 # This program is free software; you can redistribute it and/or
@@ -35,10 +34,8 @@ from .const import DOMAIN
 import ideenergy
 
 
-# TODO List the platforms that you want to support.
-# For your initial PR, limit it to 1 platform.
-PLATFORMS = ["sensor"]
 SCAN_INTERVAL = timedelta(seconds=10)
+PLATFORMS: list[str] = ["sensor"]
 _LOGGER = logging.getLogger(__name__)
 
 
@@ -60,9 +57,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Unload a config entry."""
+
     unload_ok = await hass.config_entries.async_unload_platforms(
         entry, PLATFORMS
     )
+
     if unload_ok:
         hass.data[DOMAIN].pop(entry.entry_id)
 

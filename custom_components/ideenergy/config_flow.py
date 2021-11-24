@@ -1,6 +1,5 @@
-#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-
+#
 # Copyright (C) 2021 Luis López <luis@cuarentaydos.com>
 #
 # This program is free software; you can redistribute it and/or
@@ -19,17 +18,19 @@
 # USA.
 
 
+from typing import Any, Optional
+
 import ideenergy
 import voluptuous as vol
 from homeassistant import config_entries
 from homeassistant.const import CONF_NAME, CONF_PASSWORD, CONF_USERNAME
+from homeassistant.data_entry_flow import FlowResult
 from homeassistant.helpers.aiohttp_client import async_create_clientsession
 
 from . import _LOGGER
 from .const import DEFAULT_NAME, DOMAIN
 
-
-UI_CONFIG_SCHEMA = vol.Schema(
+STEP_USER_DATA_SCHEMA = vol.Schema(
     {
         vol.Required(CONF_NAME, default=DEFAULT_NAME): str,
         vol.Required(CONF_USERNAME): str,
@@ -38,8 +39,27 @@ UI_CONFIG_SCHEMA = vol.Schema(
 )
 
 
-class IDEEnergyConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
-    async def async_step_user(self, user_input=None):
+async def validate_user_input(hass, user_input):
+    username = user_input[CONF_USERNAME]
+    password = user_input[CONF_PASSWORD]
+
+    sess = async_create_clientsession(hass)
+    client = ideenergy.Client(sess, username, password)
+
+    await client.login()
+    return {
+        CONF_NAME: DEFAULT_NAME,
+        CONF_USERNAME: username,
+        CONF_PASSWORD: password,
+    }
+
+
+class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
+    VERSION = 1
+
+    async def async_step_user(
+        self, user_input: Optional[dict[str, Any]] = None
+    ) -> FlowResult:
         """Handle a flow initialized by the user."""
         errors = {}
 
@@ -55,20 +75,8 @@ class IDEEnergyConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 _LOGGER.exception("Unexpected exception")
                 errors["base"] = "unknown"
             else:
-                return self.async_create_entry(title=DOMAIN, data=info)
+                return self.async_create_entry(title=info["name"], data=info)
 
         return self.async_show_form(
-            step_id="user", data_schema=UI_CONFIG_SCHEMA, errors=errors
+            step_id="user", data_schema=STEP_USER_DATA_SCHEMA, errors=errors
         )
-
-
-async def validate_user_input(hass, user_input):
-    username = user_input[CONF_USERNAME]
-    password = user_input[CONF_PASSWORD]
-
-    sess = async_create_clientsession(hass)
-    client = ideenergy.Client(sess, username, password)
-
-    await client.login()
-
-    return {CONF_USERNAME: username, CONF_PASSWORD: password}

@@ -35,10 +35,11 @@ from homeassistant.core import HomeAssistant
 
 # Maybe we need to mark some function as callback but I'm not sure whose.
 # from homeassistant.core import callback
-from homeassistant.helpers.entity import Entity
+from homeassistant.components.sensor import SensorEntity
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.event import async_track_time_change
 from homeassistant.helpers.restore_state import RestoreEntity
+from homeassistant.helpers.typing import DiscoveryInfoType
 from homeassistant.util import dt
 
 from . import _LOGGER
@@ -51,29 +52,67 @@ from .const import (
 )
 
 
-async def async_setup_entry(
-    hass: HomeAssistant,
-    config_entry: ConfigEntry,
-    async_add_entities: AddEntitiesCallback,
-) -> None:
-    sensors = [
-        IDEEnergyAccumulateSensor(
-            name=DEFAULT_NAME,
-            api=hass.data[DOMAIN][config_entry.entry_id],
-            unique_id=config_entry.unique_id,
-        )
-    ]
-
-    async_add_entities(sensors, False)  # Update entity on add
-
-
-class IDEEnergyAccumulateSensor(RestoreEntity, Entity):
-    def __init__(self, name, api, unique_id):
-        self._name = name
-        self._api = api
+class IDEEnergyAccumulateSensor(RestoreEntity, SensorEntity):
+    def __init__(self, name, api, unique_id, details):
+        self._name = name + "_consumed"
         self._unique_id = unique_id
+
+        # TODO: check serial as valid identifier
+        self._device_info = {
+            "identifiers": {
+                (DOMAIN, self.unique_id),
+                ("serial", str(details["listContador"][0]["numSerieEquipo"])),
+            },
+            "manufacturer": details["listContador"][0]["tipMarca"],
+            "name": self._name,
+        }
+
+        self._api = api
         self._state = None
         self._unsub_sched_update = None
+
+    @property
+    def name(self):
+        return self._name
+
+    @property
+    def unit_of_measurement(self):
+        return ENERGY_KILO_WATT_HOUR
+
+    @property
+    def unique_id(self):
+        return self._unique_id
+
+    @property
+    def device_info(self):
+        return self._device_info
+
+    @property
+    def should_poll(self):
+        return False
+
+    @property
+    def state(self):
+        return self._state
+
+    @property
+    def device_class(self):
+        return DEVICE_CLASS_ENERGY
+
+    @property
+    def extra_state_attributes(self):
+        return {
+            ATTR_LAST_RESET: self.last_reset,
+            ATTR_STATE_CLASS: self.state_class,
+        }
+
+    @property
+    def last_reset(self):
+        self._last_reset = dt.utc_from_timestamp(0)  # Deprecated
+
+    @property
+    def state_class(self):
+        return STATE_CLASS_TOTAL_INCREASING
 
     async def async_added_to_hass(self) -> None:
         state = await self.async_get_last_state()
@@ -153,43 +192,26 @@ class IDEEnergyAccumulateSensor(RestoreEntity, Entity):
         self._state = measure.accumulate
         _LOGGER.info(f"State updated: {self.state} {ENERGY_KILO_WATT_HOUR}")
 
-    @property
-    def name(self) -> str:
-        """Return the name of the sensor."""
-        return self._name
 
-    @property
-    def unique_id(self) -> Optional[str]:
-        """Return a unique ID."""
-        return self._unique_id
+async def async_setup_entry(
+    hass: HomeAssistant,
+    config_entry: ConfigEntry,
+    add_entities: AddEntitiesCallback,
+    discovery_info: Optional[
+        DiscoveryInfoType
+    ] = None,  # noqa DiscoveryInfoType | None
+):
 
-    @property
-    def state(self):
-        return self._state
+    api = hass.data[DOMAIN][config_entry.entry_id]
+    details = await api.get_contract_details()
 
-    @property
-    def device_class(self):
-        return DEVICE_CLASS_ENERGY
+    sensors = [
+        IDEEnergyAccumulateSensor(
+            api=api,
+            name=config_entry.data.get("name", DEFAULT_NAME),
+            unique_id=config_entry.unique_id,
+            details=details,
+        )
+    ]
 
-    @property
-    def unit_of_measurement(self):
-        return ENERGY_KILO_WATT_HOUR
-
-    @property
-    def should_poll(self):
-        return False
-
-    @property
-    def extra_state_attributes(self):
-        return {
-            ATTR_LAST_RESET: self.last_reset,
-            ATTR_STATE_CLASS: self.state_class,
-        }
-
-    @property
-    def last_reset(self):
-        return dt.utc_from_timestamp(0)
-
-    @property
-    def state_class(self):
-        return STATE_CLASS_TOTAL_INCREASING
+    add_entities(sensors, False)  # Update entity on add

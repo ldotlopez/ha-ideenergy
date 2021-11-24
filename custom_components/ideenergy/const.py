@@ -1,6 +1,5 @@
-#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-
+#
 # Copyright (C) 2021 Luis López <luis@cuarentaydos.com>
 #
 # This program is free software; you can redistribute it and/or
@@ -20,9 +19,7 @@
 
 
 DOMAIN = "ideenergy"
-PLATFORMS = ["sensor"]
 DEFAULT_NAME = "ICP"
-
 UPDATE_BARRIER_MINUTE_MIN = 55
 UPDATE_BARRIER_MINUTE_MAX = 59
 STATE_MAX_AGE = 60 * 60

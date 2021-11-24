@@ -1,0 +1,6 @@
+{
+  "name": "i-de energy consumption",
+  "render_readme": true,
+  "domains": ["sensor"],
+  "content_in_root": false
+}
