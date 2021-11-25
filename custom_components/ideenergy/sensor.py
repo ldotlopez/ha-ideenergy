@@ -209,7 +209,7 @@ async def async_setup_entry(
         IDEEnergyAccumulateSensor(
             api=api,
             name=config_entry.data.get("name", DEFAULT_NAME),
-            unique_id=config_entry.unique_id,
+            unique_id=config_entry.entry_id,
             details=details,
         )
     ]
