@@ -1,20 +1,29 @@
 {
-  "config": {
-    "step": {
-      "user": {
-        "data": {
-          "name": "[%key:common::config_flow::data::name%]",
-          "username": "[%key:common::config_flow::data::username%]",
-          "password": "[%key:common::config_flow::data::password%]"
-        }
-      }
-    },
-    "error": {
-      "invalid_auth": "[%key:common::config_flow::error::invalid_auth%]",
-      "unknown": "[%key:common::config_flow::error::unknown%]"
-    },
-    "abort": {
-      "already_configured": "[%key:common::config_flow::abort::already_configured_device%]"
-    }
-  }
+	"config": {
+		"step": {
+			"user": {
+				"data": {
+					"name": "[%key:common::config_flow::data::name%]",
+					"username": "[%key:common::config_flow::data::username%]",
+					"password": "[%key:common::config_flow::data::password%]"
+				}
+			}
+		},
+		"error": {
+			"invalid_auth": "[%key:common::config_flow::error::invalid_auth%]",
+			"unknown": "[%key:common::config_flow::error::unknown%]"
+		},
+		"abort": {
+			"already_configured": "[%key:common::config_flow::abort::already_configured_device%]"
+		}
+	},
+	"options": {
+		"step": {
+			"init": {
+				"data": {
+					"enable_direct_measure": "[%key:common::config_flow::data::enable_direct_measure%]"
+				}
+			}
+		}
+	}
 }

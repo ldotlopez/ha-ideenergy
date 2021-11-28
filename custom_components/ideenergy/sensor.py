@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
 # Copyright (C) 2021 Luis López <luis@cuarentaydos.com>
@@ -28,7 +27,6 @@ from typing import Optional
 
 import ideenergy
 from homeassistant.components.sensor import (
-    ATTR_LAST_RESET,
     ATTR_STATE_CLASS,
     STATE_CLASS_MEASUREMENT,
     STATE_CLASS_TOTAL_INCREASING,
@@ -49,9 +47,10 @@ from homeassistant.util import dt as dt_util
 
 from . import _LOGGER
 from .const import (
+    CONF_ENABLE_DIRECT_MEASURE,
     DOMAIN,
     HISTORICAL_MAX_AGE,
-    STATE_MAX_AGE,
+    MEASURE_MAX_AGE,
     UPDATE_BARRIER_MINUTE_MAX,
     UPDATE_BARRIER_MINUTE_MIN,
 )
@@ -141,7 +140,7 @@ class IDEEnergyAccumulatedSensor(RestoreEntity, SensorEntity):
 
                 if (
                     dt_util.now() - state.last_updated
-                ).total_seconds() > STATE_MAX_AGE:
+                ).total_seconds() > MEASURE_MAX_AGE:
                     force_update = True
                     update_reason = "Previous state is too old"
 
@@ -318,8 +317,7 @@ class IDEEnergyHistoricalSensor(SensorEntity):
         # entity duplication (adding second entity with '_2' suffix)
         if not self._hass_state_initialized:
             self._logger.debug(
-                "state has not been initialized yet, "
-                "skip history rewrite"
+                "state has not been initialized yet, " "skip history rewrite"
             )
             return
 
@@ -356,27 +354,30 @@ async def async_setup_entry(
         DiscoveryInfoType
     ] = None,  # noqa DiscoveryInfoType | None
 ):
-
     api = hass.data[DOMAIN][config_entry.entry_id]
     details = await api.get_contract_details()
 
-    add_entities(
-        [
+    sensors = [
+        IDEEnergyHistoricalSensor(
+            hass=hass,
+            api=api,
+            name=config_entry.data[CONF_NAME].lower(),
+            unique_id=f"{config_entry.entry_id}-historical",
+            details=details,
+            logger=_LOGGER.getChild("historical"),
+        )
+    ]
+
+    # Shouldn't this option be already set?
+    if config_entry.options.get(CONF_ENABLE_DIRECT_MEASURE, False):
+        sensors.append(
             IDEEnergyAccumulatedSensor(
                 api=api,
-                name=config_entry.data[CONF_NAME],
+                name=config_entry.data[CONF_NAME].lower(),
                 unique_id=f"{config_entry.entry_id}-accumulated",
                 details=details,
-                logger=_LOGGER.getChild('accumulated')
-            ),
-            IDEEnergyHistoricalSensor(
-                hass=hass,
-                api=api,
-                name=config_entry.data[CONF_NAME],
-                unique_id=f"{config_entry.entry_id}-historical",
-                details=details,
-                logger=_LOGGER.getChild("historical"),
-            ),
-        ],
-        update_before_add=True,
-    )
+                logger=_LOGGER.getChild("accumulated"),
+            )
+        )
+
+    add_entities(sensors, update_before_add=True)

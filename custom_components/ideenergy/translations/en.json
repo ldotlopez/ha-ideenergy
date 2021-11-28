@@ -11,9 +11,18 @@
         "step": {
             "user": {
                 "data": {
-                    "host": "Host",
+                    "name": "Name",
                     "password": "Password",
                     "username": "Username"
+                }
+            }
+        }
+    },
+    "options": {
+        "step": {
+            "init": {
+                "data": {
+                    "enable_direct_measure": "Enable direct measure sensor"
                 }
             }
         }

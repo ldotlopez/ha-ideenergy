@@ -24,13 +24,14 @@ import ideenergy
 import voluptuous as vol
 from homeassistant import config_entries
 from homeassistant.const import CONF_NAME, CONF_PASSWORD, CONF_USERNAME
+from homeassistant.core import callback
 from homeassistant.data_entry_flow import FlowResult
 from homeassistant.helpers.aiohttp_client import async_create_clientsession
 
 from . import _LOGGER
-from .const import DEFAULT_NAME, DOMAIN
+from .const import CONF_ENABLE_DIRECT_MEASURE, DEFAULT_NAME, DOMAIN
 
-STEP_USER_DATA_SCHEMA = vol.Schema(
+DATA_SCHEMA = vol.Schema(
     {
         vol.Required(CONF_NAME, default=DEFAULT_NAME): str,
         vol.Required(CONF_USERNAME): str,
@@ -39,23 +40,13 @@ STEP_USER_DATA_SCHEMA = vol.Schema(
 )
 
 
-async def validate_user_input(hass, user_input):
-    username = user_input[CONF_USERNAME]
-    password = user_input[CONF_PASSWORD]
-
-    sess = async_create_clientsession(hass)
-    client = ideenergy.Client(sess, username, password)
-
-    await client.login()
-    return {
-        CONF_NAME: DEFAULT_NAME,
-        CONF_USERNAME: username,
-        CONF_PASSWORD: password,
-    }
-
-
 class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     VERSION = 1
+
+    @staticmethod
+    @callback
+    def async_get_options_flow(config_entry):
+        return OptionsFlowHandler(config_entry)
 
     async def async_step_user(
         self, user_input: Optional[dict[str, Any]] = None
@@ -69,14 +60,57 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
             try:
                 info = await validate_user_input(self.hass, user_input)
+
             except ideenergy.ClientError:
                 errors["base"] = "invalid_auth"
+
             except Exception:  # pylint: disable=broad-except
                 _LOGGER.exception("Unexpected exception")
                 errors["base"] = "unknown"
+
             else:
-                return self.async_create_entry(title=info["name"], data=info)
+                info[CONF_NAME] = user_input.get(CONF_NAME, DEFAULT_NAME)
+                return self.async_create_entry(
+                    title=info[CONF_NAME], data=info
+                )
 
         return self.async_show_form(
-            step_id="user", data_schema=STEP_USER_DATA_SCHEMA, errors=errors
+            step_id="user", data_schema=DATA_SCHEMA, errors=errors
         )
+
+
+class OptionsFlowHandler(config_entries.OptionsFlow):
+    def __init__(self, config_entry):
+        """Initialize options flow."""
+        self.config_entry = config_entry
+
+    async def async_step_init(self, user_input=None):
+        if user_input is not None:
+            return self.async_create_entry(title="", data=user_input)
+
+        OPTIONS_SCHEMA = vol.Schema(
+            {
+                vol.Required(
+                    CONF_ENABLE_DIRECT_MEASURE,
+                    default=self.config_entry.options.get(
+                        CONF_ENABLE_DIRECT_MEASURE
+                    ),
+                ): bool
+            }
+        )
+
+        return self.async_show_form(step_id="init", data_schema=OPTIONS_SCHEMA)
+
+
+async def validate_user_input(hass, user_input):
+    username = user_input[CONF_USERNAME]
+    password = user_input[CONF_PASSWORD]
+
+    sess = async_create_clientsession(hass)
+    client = ideenergy.Client(sess, username, password)
+
+    await client.login()
+    return {
+        CONF_USERNAME: username,
+        CONF_PASSWORD: password,
+    }
