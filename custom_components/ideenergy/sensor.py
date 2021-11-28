@@ -27,6 +27,7 @@ from typing import Optional
 
 import ideenergy
 from homeassistant.components.sensor import (
+    ATTR_LAST_RESET,
     ATTR_STATE_CLASS,
     STATE_CLASS_MEASUREMENT,
     STATE_CLASS_TOTAL_INCREASING,
@@ -247,6 +248,10 @@ class IDEEnergyHistoricalSensor(SensorEntity):
         return ENERGY_KILO_WATT_HOUR
 
     @property
+    def native_unit_of_measurement(self):
+        return ENERGY_KILO_WATT_HOUR
+
+    @property
     def unique_id(self):
         return self._unique_id
 
@@ -276,12 +281,17 @@ class IDEEnergyHistoricalSensor(SensorEntity):
     @property
     def extra_state_attributes(self):
         return {
+            ATTR_LAST_RESET: self.last_reset,
             ATTR_STATE_CLASS: self.state_class,
         }
 
     @property
     def state_class(self):
         return STATE_CLASS_MEASUREMENT
+
+    @property
+    def last_reset(self):
+        return None
 
     async def async_update(self):
         entity_id = f"sensor.{self.name}"
