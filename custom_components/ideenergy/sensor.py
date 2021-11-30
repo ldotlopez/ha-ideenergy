@@ -54,7 +54,7 @@ from .const import (
     UPDATE_BARRIER_MINUTE_MAX,
     UPDATE_BARRIER_MINUTE_MIN,
 )
-from .hack import write_state_at_time
+from .historical_state import HistoricalEntity
 
 
 class IDEEnergyAccumulatedSensor(RestoreEntity, SensorEntity):
@@ -201,7 +201,7 @@ class IDEEnergyAccumulatedSensor(RestoreEntity, SensorEntity):
         )
 
 
-class IDEEnergyHistoricalSensor(SensorEntity):
+class IDEEnergyHistoricalSensor(HistoricalEntity, SensorEntity):
     def __init__(self, hass, name, api, unique_id, details, logger=_LOGGER):
         self._logger = logger
         self._name = name + "_historical"
@@ -217,26 +217,7 @@ class IDEEnergyHistoricalSensor(SensorEntity):
             "name": self._name,
         }
 
-        self._hass = hass
         self._api = api
-        self._states = []
-        self._hass_state_initialized = False
-        self._last_api_update = dt_util.as_local(datetime.fromtimestamp(0))
-
-    # async def async_added_to_hass(self) -> None:
-    #     state = await self.async_get_last_state()
-
-    #     try:
-    #         self._states = [(state.last_changed, float(state.state))]
-    #     except (AttributeError, TypeError):
-    #         self._logger.debug(f"Invalid previous state: {state!r}")
-    #         self._states = []
-
-    #     self._last_api_update = state.last_updated
-    #     self._logger.debug(
-    #         "Restored state: {(state.last_changed, state.state)!r}, "
-    #         "API update: {state.last_updated}",
-    #     )
 
     @property
     def name(self):
@@ -251,19 +232,12 @@ class IDEEnergyHistoricalSensor(SensorEntity):
         return self._unique_id
 
     @property
-    def available(self):
-        return len(self._states) > 0
-
-    @property
     def state(self):
-        if self._hass_state_initialized is False:
-            self._logger.debug("HASS state initalized")
-        self._hass_state_initialized = True
-        return self._states[-1][1]
+        # HistoricalEntities doesnt' pull but state is accessed only once when
+        # the sensor is registered for the first time in the database
 
-    @property
-    def should_poll(self):
-        return True
+        if state := self.historical_state():
+            return float(state)
 
     @property
     def device_info(self):
@@ -284,66 +258,19 @@ class IDEEnergyHistoricalSensor(SensorEntity):
         return STATE_CLASS_MEASUREMENT
 
     async def async_update(self):
-        entity_id = f"sensor.{self.name}"
-        now = dt_util.now()
-
-        refresh_api_data = (
-            not self._states
-            or (now - self._last_api_update).total_seconds()
-            >= HISTORICAL_MAX_AGE
-        )
-
-        # Update data from API
-        if refresh_api_data:
-            self._logger.debug("API data is too old, updating")
-            try:
-                data = await self._api.get_consumption_period(
-                    now.replace(day=1), now
-                )
-                data["historical"] = list(
-                    sorted(data["historical"], key=lambda x: x[0])
-                )
-                self._states = data["historical"]
-                self._last_api_update = now
-
-            except ideenergy.RequestFailedError as e:
-                self._logger.error(f"Error getting data from API: {e}")
-                refresh_api_data = False
-
-        else:
-            self._logger.debug("Skip API data update")
-
-        # Writing historical data before first state has been generate leads to
-        # entity duplication (adding second entity with '_2' suffix)
-        if not self._hass_state_initialized:
-            self._logger.debug(
-                "state has not been initialized yet, " "skip history rewrite"
+        now = datetime.now()
+        start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+        end = now.replace(hour=0, minute=0, second=0, microsecond=0)
+        data = await self._api.get_consumption_period(start, end)
+        data = [
+            (
+                dt_util.as_utc(dt) + timedelta(hours=1),
+                value,
+                {"last_reset": dt_util.as_utc(dt)},
             )
-            return
-
-        if len(self._states) <= 1:
-            self._logger.debug("No historical states to write")
-            return
-
-        try:
-            attributes = self._hass.states.get(entity_id).attributes
-        except AttributeError:
-            attributes = None
-
-        for (dt, state) in self._states:
-            write_state_at_time(
-                self._hass, entity_id, state, dt, attributes=attributes
-            )
-            diff = int((now - dt).total_seconds())
-            mins = int(diff // 60)
-            secs = diff % 60
-
-            self._logger.debug(
-                f"{entity_id} set to {state} at "
-                f"{dt.hour:02d}:{dt.minute:02d}:{dt.second:02d} "
-                f"({mins:02d} min {secs:02d} secs ago)"
-            )
-        self._states = [self._states[-1]]
+            for (dt, value) in data['historical']
+        ]
+        self.extend_historical_log(data)
 
 
 async def async_setup_entry(

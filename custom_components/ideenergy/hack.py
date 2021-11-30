@@ -17,56 +17,93 @@
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301,
 # USA.
 
-from homeassistant.core import HomeAssistant
+
+from __future__ import annotations
+
+import datetime
+import math
+import sys
+from collections.abc import Mapping
+from datetime import datetime
+from typing import Any
+
+from homeassistant.config import DATA_CUSTOMIZE
+from homeassistant.const import (
+    ATTR_ASSUMED_STATE,
+    ATTR_ATTRIBUTION,
+    ATTR_DEVICE_CLASS,
+    ATTR_ENTITY_PICTURE,
+    ATTR_FRIENDLY_NAME,
+    ATTR_ICON,
+    ATTR_SUPPORTED_FEATURES,
+    ATTR_UNIT_OF_MEASUREMENT,
+    STATE_UNAVAILABLE,
+    STATE_UNKNOWN,
+    TEMP_CELSIUS,
+    TEMP_FAHRENHEIT,
+)
 from homeassistant.core import (
     EVENT_STATE_CHANGED,
     Any,
-    Optional,
     Context,
     EventOrigin,
     Mapping,
     MappingProxyType,
+    Optional,
     State,
+    StateMachine,
     callback,
     datetime,
     dt_util,
 )
+from homeassistant.helpers.entity import Entity
+from homeassistant.helpers.typing import Any, Optional
+from homeassistant.util import dt as dt_util
+
+FLOAT_PRECISION = (
+    abs(int(math.floor(math.log10(abs(sys.float_info.epsilon))))) - 1
+)
 
 
 def write_state_at_time(
-    hass: HomeAssistant,
-    entity_id: str,
+    self: Entity,
     state: str,
     dt: Optional[datetime.datetime],
     attributes: Optional[MappingProxyType] = None,
 ):
-    if attributes is None:
-        old_state = hass.states.get(entity_id)
-        if old_state:
-            attributes = hass.states.get(entity_id).attributes
-        else:
-            attributes = None
+    # if attributes is None:
+    #     old_state = self.hass.states.get(self.entity_id)
+    #     if old_state:
+    #         attributes = self.hass.states.get(self.entity_id).attributes
+    #     else:
+    #         attributes = None
+
+    state = _stringify_state(self, state)
+    attrs = dict(_build_attributes(self, state))
+    attrs.update(attributes or {})
 
     return async_set(
-        hass.states,
-        entity_id=entity_id,
+        self.hass.states,
+        entity_id=self.entity_id,
         new_state=state,
-        attributes=attributes,
-        force_update=False,
-        context=None,
-        now=dt,
+        attributes=attrs,
+        time_fired=dt,
     )
+
+
+# Modified version of
+# homeassistant.core.StateMachine.async_set
 
 
 @callback
 def async_set(
-    state_machine,
+    self: StateMachine,
     entity_id: str,
     new_state: str,
     attributes: Optional[Mapping[str, Any]] = None,
     force_update: bool = False,
     context: Optional[Context] = None,
-    now: Optional[datetime.datetime] = None,
+    time_fired: Optional[datetime.datetime] = None,
 ) -> None:
     """Set the state of an entity, add entity if it does not exist.
 
@@ -80,7 +117,7 @@ def async_set(
     entity_id = entity_id.lower()
     new_state = str(new_state)
     attributes = attributes or {}
-    if (old_state := state_machine._states.get(entity_id)) is None:
+    if (old_state := self._states.get(entity_id)) is None:
         same_state = False
         same_attr = False
         last_changed = None
@@ -95,21 +132,106 @@ def async_set(
     if context is None:
         context = Context()
 
-    now = now or dt_util.utcnow()
+    time_fired = time_fired or dt_util.utcnow()
     state = State(
         entity_id,
         new_state,
         attributes,
         last_changed,
-        now,
+        time_fired,
         context,
         old_state is None,
     )
-    state_machine._states[entity_id] = state
-    state_machine._bus.async_fire(
+    self._states[entity_id] = state
+    self._bus.async_fire(
         EVENT_STATE_CHANGED,
         {"entity_id": entity_id, "old_state": old_state, "new_state": state},
         EventOrigin.local,
         context,
-        time_fired=now,
+        time_fired=time_fired,
     )
+
+
+# Modified version of
+# homeassistant.helpers.entity.Entity._stringify_state
+
+
+def _stringify_state(self: Entity, state: Any) -> str:
+    """Convert state to string."""
+    if not self.available:
+        return STATE_UNAVAILABLE
+    if state is None:
+        return STATE_UNKNOWN
+    if isinstance(state, float):
+        # If the entity's state is a float, limit precision according to machine
+        # epsilon to make the string representation readable
+        return f"{state:.{FLOAT_PRECISION}}"
+    return str(state)
+
+
+# Code extracted and modified from
+# homeassistant.helpers.entity.Entity._async_write_ha_state
+
+
+def _build_attributes(self: Entity, state: Any) -> Mapping[str, str]:
+    attr = self.capability_attributes
+    attr = dict(attr) if attr else {}
+
+    state = _stringify_state(self, state)
+    if self.available:
+        attr.update(self.state_attributes or {})
+        extra_state_attributes = self.extra_state_attributes
+        # Backwards compatibility for "device_state_attributes" deprecated in 2021.4
+        # Add warning in 2021.6, remove in 2021.10
+        if extra_state_attributes is None:
+            extra_state_attributes = self.device_state_attributes
+        attr.update(extra_state_attributes or {})
+
+    unit_of_measurement = self.unit_of_measurement
+    if unit_of_measurement is not None:
+        attr[ATTR_UNIT_OF_MEASUREMENT] = unit_of_measurement
+
+    entry = self.registry_entry
+    # pylint: disable=consider-using-ternary
+    if (name := (entry and entry.name) or self.name) is not None:
+        attr[ATTR_FRIENDLY_NAME] = name
+
+    if (icon := (entry and entry.icon) or self.icon) is not None:
+        attr[ATTR_ICON] = icon
+
+    if (entity_picture := self.entity_picture) is not None:
+        attr[ATTR_ENTITY_PICTURE] = entity_picture
+
+    if assumed_state := self.assumed_state:
+        attr[ATTR_ASSUMED_STATE] = assumed_state
+
+    if (supported_features := self.supported_features) is not None:
+        attr[ATTR_SUPPORTED_FEATURES] = supported_features
+
+    if (device_class := self.device_class) is not None:
+        attr[ATTR_DEVICE_CLASS] = str(device_class)
+
+    if (attribution := self.attribution) is not None:
+        attr[ATTR_ATTRIBUTION] = attribution
+
+    # Overwrite properties that have been set in the config file.
+    if DATA_CUSTOMIZE in self.hass.data:
+        attr.update(self.hass.data[DATA_CUSTOMIZE].get(self.entity_id))
+
+    # Convert temperature if we detect one
+    try:
+        unit_of_measure = attr.get(ATTR_UNIT_OF_MEASUREMENT)
+        units = self.hass.config.units
+        if (
+            unit_of_measure in (TEMP_CELSIUS, TEMP_FAHRENHEIT)
+            and unit_of_measure != units.temperature_unit
+        ):
+            prec = len(state) - state.index(".") - 1 if "." in state else 0
+            temp = units.temperature(float(state), unit_of_measure)
+            state = str(round(temp) if prec == 0 else round(temp, prec))
+            attr[ATTR_UNIT_OF_MEASUREMENT] = units.temperature_unit
+    except ValueError:
+        # Could not convert state to float
+        pass
+
+    return attr
