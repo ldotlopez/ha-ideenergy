@@ -20,12 +20,10 @@
 
 from __future__ import annotations
 
-import datetime
 import math
 import sys
-from collections.abc import Mapping
 from datetime import datetime
-from typing import Any
+from typing import Any, Optional, Mapping
 
 from homeassistant.config import DATA_CUSTOMIZE
 from homeassistant.const import (
@@ -44,51 +42,19 @@ from homeassistant.const import (
 )
 from homeassistant.core import (
     EVENT_STATE_CHANGED,
-    Any,
     Context,
-    EventOrigin,
-    Mapping,
     MappingProxyType,
-    Optional,
+    EventOrigin,
     State,
     StateMachine,
     callback,
-    datetime,
     dt_util,
 )
 from homeassistant.helpers.entity import Entity
-from homeassistant.helpers.typing import Any, Optional
-from homeassistant.util import dt as dt_util
 
 FLOAT_PRECISION = (
     abs(int(math.floor(math.log10(abs(sys.float_info.epsilon))))) - 1
 )
-
-
-def write_state_at_time(
-    self: Entity,
-    state: str,
-    dt: Optional[datetime.datetime],
-    attributes: Optional[MappingProxyType] = None,
-):
-    # if attributes is None:
-    #     old_state = self.hass.states.get(self.entity_id)
-    #     if old_state:
-    #         attributes = self.hass.states.get(self.entity_id).attributes
-    #     else:
-    #         attributes = None
-
-    state = _stringify_state(self, state)
-    attrs = dict(_build_attributes(self, state))
-    attrs.update(attributes or {})
-
-    return async_set(
-        self.hass.states,
-        entity_id=self.entity_id,
-        new_state=state,
-        attributes=attrs,
-        time_fired=dt,
-    )
 
 
 # Modified version of
