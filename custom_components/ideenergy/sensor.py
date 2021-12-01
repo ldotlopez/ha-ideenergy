@@ -221,6 +221,10 @@ class IDEEnergyHistoricalSensor(HistoricalEntity, SensorEntity):
         self._api = api
 
     @property
+    def unique_id(self):
+        return self._unique_id
+
+    @property
     def name(self):
         return self._name
 
@@ -233,16 +237,8 @@ class IDEEnergyHistoricalSensor(HistoricalEntity, SensorEntity):
         return ENERGY_KILO_WATT_HOUR
 
     @property
-    def unique_id(self):
-        return self._unique_id
-
-    @property
     def state(self):
-        # HistoricalEntities doesnt' pull but state is accessed only once when
-        # the sensor is registered for the first time in the database
-
-        if state := self.historical_state():
-            return float(state)
+        return None
 
     @property
     def device_info(self):
@@ -269,13 +265,18 @@ class IDEEnergyHistoricalSensor(HistoricalEntity, SensorEntity):
 
     async def async_update(self):
         now = datetime.now()
-        start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+
+        # 00:00 of today
         end = now.replace(hour=0, minute=0, second=0, microsecond=0)
+
+        # 00:00 of the prev week
+        start = end - timedelta(days=7)
+
         data = await self._api.get_consumption_period(start, end)
         data = [
             (
                 dt_util.as_utc(dt) + timedelta(hours=1),
-                value,
+                value / 1000,
                 {"last_reset": dt_util.as_utc(dt)},
             )
             for (dt, value) in data['historical']
