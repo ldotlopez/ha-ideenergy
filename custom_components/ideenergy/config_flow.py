@@ -29,19 +29,28 @@ from homeassistant.data_entry_flow import FlowResult
 from homeassistant.helpers.aiohttp_client import async_create_clientsession
 
 from . import _LOGGER
-from .const import CONF_ENABLE_DIRECT_MEASURE, DEFAULT_NAME, DOMAIN
+from .const import (
+    CONF_CONTRACT,
+    CONF_ENABLE_DIRECT_MEASURE,
+    DEFAULT_NAME,
+    DOMAIN,
+)
 
-DATA_SCHEMA = vol.Schema(
+AUTH_SCHEMA = vol.Schema(
     {
         vol.Required(CONF_NAME, default=DEFAULT_NAME): str,
-        vol.Required(CONF_USERNAME): str,
-        vol.Required(CONF_PASSWORD): str,
+        vol.Required(CONF_USERNAME, default="ldotlopez@gmail.com"): str,
+        vol.Required(CONF_PASSWORD, default="hAQiunh9XgKdctxa"): str,
     }
 )
 
 
-class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
+class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):  # type: ignore[call-arg]
     VERSION = 1
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.info = {}
 
     @staticmethod
     @callback
@@ -69,14 +78,32 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 errors["base"] = "unknown"
 
             else:
-                info[CONF_NAME] = user_input.get(CONF_NAME, DEFAULT_NAME)
-                return self.async_create_entry(
-                    title=info[CONF_NAME], data=info
-                )
+                self.info = info
+                self.info[CONF_NAME] = user_input.get(CONF_NAME, DEFAULT_NAME)
+
+                return await self.async_step_contract()
+                # info[CONF_NAME] = user_input.get(CONF_NAME, DEFAULT_NAME)
+                # return self.async_create_entry(title=info[CONF_NAME], data=info)
 
         return self.async_show_form(
-            step_id="user", data_schema=DATA_SCHEMA, errors=errors
+            step_id="user", data_schema=AUTH_SCHEMA, errors=errors
         )
+
+    async def async_step_contract(
+        self, user_input: Optional[dict[str, Any]] = None
+    ) -> FlowResult:
+        contracts = await self.info["api"].get_contracts()
+        contracts = {x["direccion"]: x["codContrato"] for x in contracts}
+
+        schema = vol.Schema({vol.Required(CONF_CONTRACT): vol.In(contracts.keys())})
+
+        if not user_input:
+            return self.async_show_form(step_id="contract", data_schema=schema)
+
+        self.info[CONF_CONTRACT] = contracts[user_input["contract"]]
+        self.info[CONF_NAME] = self.info[CONF_NAME] + "_" + self.info[CONF_CONTRACT]
+
+        return self.async_create_entry(title=self.info[CONF_NAME], data=self.info)
 
 
 class OptionsFlowHandler(config_entries.OptionsFlow):
@@ -92,9 +119,7 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
             {
                 vol.Required(
                     CONF_ENABLE_DIRECT_MEASURE,
-                    default=self.config_entry.options.get(
-                        CONF_ENABLE_DIRECT_MEASURE
-                    ),
+                    default=self.config_entry.options.get(CONF_ENABLE_DIRECT_MEASURE),
                 ): bool
             }
         )
@@ -111,6 +136,7 @@ async def validate_user_input(hass, user_input):
 
     await client.login()
     return {
+        "api": client,
         CONF_USERNAME: username,
         CONF_PASSWORD: password,
     }
