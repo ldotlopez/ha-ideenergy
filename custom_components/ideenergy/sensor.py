@@ -55,7 +55,7 @@ from .const import (
 from .historical_state import HistoricalEntity
 
 
-class IDEEnergyAccumulatedSensor(RestoreEntity, SensorEntity):
+class Accumulated(RestoreEntity, SensorEntity):
     def __init__(self, unique_id, device_info, name, api, contract, logger=_LOGGER):
         self._logger = logger
         self._name = name
@@ -190,7 +190,7 @@ class IDEEnergyAccumulatedSensor(RestoreEntity, SensorEntity):
         self._logger.info(f"State updated: {self.state} {ENERGY_KILO_WATT_HOUR}")
 
 
-class IDEEnergyHistoricalSensor(HistoricalEntity, SensorEntity):
+class Historical(HistoricalEntity, SensorEntity):
     def __init__(self, unique_id, device_info, name, api, contract, logger=_LOGGER):
         self._logger = logger
         self._unique_id = unique_id
@@ -294,8 +294,8 @@ async def async_setup_entry(
             logger=_LOGGER.getChild(subtype),
         )
         for (Sensor, subtype) in [
-            (IDEEnergyHistoricalSensor, "historical"),
-            (IDEEnergyAccumulatedSensor, "accumulated"),
+            (Historical, "historical"),
+            (Accumulated, "accumulated"),
         ]
     }
 
