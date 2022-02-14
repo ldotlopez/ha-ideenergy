@@ -18,6 +18,7 @@
 # USA.
 
 
+import os
 from typing import Any, Optional
 
 import ideenergy
@@ -29,18 +30,13 @@ from homeassistant.data_entry_flow import FlowResult
 from homeassistant.helpers.aiohttp_client import async_create_clientsession
 
 from . import _LOGGER
-from .const import (
-    CONF_CONTRACT,
-    CONF_ENABLE_DIRECT_MEASURE,
-    DEFAULT_NAME,
-    DOMAIN,
-)
+from .const import CONF_CONTRACT, CONF_ENABLE_DIRECT_MEASURE, DEFAULT_NAME, DOMAIN
 
 AUTH_SCHEMA = vol.Schema(
     {
         vol.Required(CONF_NAME, default=DEFAULT_NAME): str,
-        vol.Required(CONF_USERNAME, default="ldotlopez@gmail.com"): str,
-        vol.Required(CONF_PASSWORD, default="hAQiunh9XgKdctxa"): str,
+        vol.Required(CONF_USERNAME, default=os.environ.get("HASS_IDE_USERNAME")): str,
+        vol.Required(CONF_PASSWORD, default=os.environ.get("HASS_IDE_PASSWORD")): str,
     }
 )
 
