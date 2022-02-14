@@ -23,6 +23,8 @@ from datetime import datetime, timedelta
 from typing import Any, Iterable, Mapping, Optional
 
 from homeassistant.core import MappingProxyType
+from homeassistant.components.sensor.recorder import compile_statistics
+from homeassistant.core import MappingProxyType, callback
 from homeassistant.helpers.entity import Entity
 from homeassistant.helpers.event import async_track_time_interval
 from homeassistant.helpers.storage import Store
@@ -102,6 +104,11 @@ class HistoricalEntity:
             return
 
         self.historical.log = list(sorted(self.historical.log, key=lambda x: x[0]))
+        if not self.historical.log:
+            return
+
+        stats_start = self.historical.log[0][2]["last_reset"]
+        stats_end = self.historical.log[-1][0]
 
         while True:
             try:
@@ -131,6 +138,24 @@ class HistoricalEntity:
             )
 
             await self.save_state({STORE_LAST_UPDATE: dt, STORE_LAST_STATE: value})
+
+        self.hass.async_add_executor_job(self._stats, stats_start, stats_end)
+
+    @callback
+    def _stats(self, start, end):
+        _LOGGER.debug(f"Similate from {start} to {end}")
+        compile_statistics(self.hass, start, end)
+
+    # @callback
+    # def _statistics(self):
+
+    #     _LOGGER.debug("Stats start")
+    #     compile_statistics(
+    #         self.hass,
+    #         dt_util.as_local(datetime(year=2021, month=11, day=1)),
+    #         dt_util.now(),
+    #     )
+    #     _LOGGER.debug("Stats done")
 
     async def save_state(self, params):
         """Convenient function to store internal state"""

@@ -21,6 +21,7 @@
 # Maybe we need to mark some function as callback but I'm not sure whose.
 # from homeassistant.core import callback
 
+import asyncio
 import random
 from datetime import datetime, timedelta
 from typing import Optional
@@ -38,7 +39,6 @@ from homeassistant.const import CONF_NAME, DEVICE_CLASS_ENERGY, ENERGY_KILO_WATT
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
-from homeassistant.helpers.event import async_track_time_change
 from homeassistant.helpers.restore_state import RestoreEntity
 from homeassistant.helpers.typing import DiscoveryInfoType
 from homeassistant.util import dt as dt_util
@@ -49,10 +49,16 @@ from .const import (
     DOMAIN,
     HISTORICAL_MAX_AGE,
     MEASURE_MAX_AGE,
-    UPDATE_BARRIER_MINUTE_MAX,
-    UPDATE_BARRIER_MINUTE_MIN,
+    UPDATE_BARRIER_MAX_MINUTE,
+    UPDATE_BARRIER_MIN_MINUTE,
+    DELAY_MIN_SECONDS,
+    DELAY_MAX_SECONDS,
 )
 from .historical_state import HistoricalEntity
+
+# Half of the interval defined with UPDATE_BARRIER_MIN_MINUTE/MAX but bigger than the
+# request time to the ICP
+SCAN_INTERVAL = timedelta(seconds=15)
 
 
 class Accumulated(RestoreEntity, SensorEntity):
@@ -64,8 +70,9 @@ class Accumulated(RestoreEntity, SensorEntity):
         self._device_info = device_info
         self._api = api
         self._contact = contract
+
         self._state = None
-        self._unsub_sched_update = None
+        self._last_update = dt_util.utc_from_timestamp(0)
 
     @property
     def name(self):
@@ -85,7 +92,7 @@ class Accumulated(RestoreEntity, SensorEntity):
 
     @property
     def should_poll(self):
-        return False
+        return True
 
     @property
     def state(self):
@@ -113,81 +120,53 @@ class Accumulated(RestoreEntity, SensorEntity):
     async def async_added_to_hass(self) -> None:
         state = await self.async_get_last_state()
 
-        force_update = False
-        update_reason = None
-
         if not state:
-            force_update = True
-            update_reason = "No previous state"
-
-        else:
-            try:
-                self._state = float(state.state)
-                self._logger.debug(
-                    f"Restored previous state: "
-                    f"{self._state} {ENERGY_KILO_WATT_HOUR}"
-                )
-
-                if (
-                    dt_util.now() - state.last_updated
-                ).total_seconds() > MEASURE_MAX_AGE:
-                    force_update = True
-                    update_reason = "Previous state is too old"
-
-            except ValueError:
-                force_update = True
-                update_reason = "Invalid previous state"
-                self.async_schedule_update_ha_state(force_refresh=True)
-
-        if force_update:
-            self._logger.debug(f"Force state refresh: {update_reason}")
-            self.async_schedule_update_ha_state(force_refresh=True)
-
-        self.schedule_next_update()
-
-    def schedule_next_update(self):
-        if self._unsub_sched_update:
-            self._unsub_sched_update()
-            self._unsub_sched_update = None
-            self._logger.debug("Previous task cleaned")
-
-        now = dt_util.now()
-        update_min = random.randrange(
-            UPDATE_BARRIER_MINUTE_MIN, UPDATE_BARRIER_MINUTE_MAX
-        )
-        update_sec = random.randrange(0, 60)
-
-        next_update = now.replace(minute=update_min, second=update_sec)
-        if now.minute >= UPDATE_BARRIER_MINUTE_MIN:
-            next_update = next_update + timedelta(hours=1)
-
-        self._logger.info(
-            f"Next update in {(next_update - now).total_seconds()} secs "
-            f"({next_update})"
-        )
-
-        self._unsub_sched_update = async_track_time_change(
-            self.hass,
-            self.do_scheduled_update,
-            hour=[next_update.hour],
-            minute=[next_update.minute],
-            second=[next_update.second],
-        )
-
-    async def do_scheduled_update(self, now):
-        self.async_schedule_update_ha_state(force_refresh=True)
-        self.schedule_next_update()
-
-    async def async_update(self):
-        try:
-            await self._api.select_contract(self._contact)
-            measure = await self._api.get_measure()
-        except ideenergy.ClientError as e:
-            self._logger.error(f"Error reading measure: {e}")
+            self._logger.debug("No previous state")
             return
 
-        self._state = measure.accumulate
-        self._logger.info(f"State updated: {self.state} {ENERGY_KILO_WATT_HOUR}")
+        try:
+            self._state = float(state.state)
+            self._last_update = state.last_updated
+
+            dt = dt_util.as_local(self._last_update)
+            self._logger.debug(
+                f"Restored previous state: {self._state} {ENERGY_KILO_WATT_HOUR} ({dt})"
+            )
+            return
+
+        except ValueError:
+            self._logger.debug("Invalid previous state")
+            return
+
+    async def async_update(self):
+        now = dt_util.as_utc(dt_util.now())
+
+        age = now - self._last_update
+        is_old = age.seconds > MEASURE_MAX_AGE
+        update_window_open = (
+            UPDATE_BARRIER_MIN_MINUTE < now.second < UPDATE_BARRIER_MAX_MINUTE
+        )
+
+        if not (is_old and update_window_open):
+            self._logger.debug(
+                f"Skip update: age={age}, update_window_open={update_window_open}"
+            )
+            return
+        try:
+            self._logger.debug("Requesting data to ICP, can take up to a minute")
+            await self._api.select_contract(self._contact)
+            measure = await self._api.get_measure()
+
+            self._state = measure.accumulate
+            self._last_update = now
+            self._logger.debug(f"State updated: {self.state} {ENERGY_KILO_WATT_HOUR}")
+
+        except ideenergy.ClientError as e:
+            self._logger.debug(f"Error reading measure: {e}.")
+
+        delay = random.randint(DELAY_MIN_SECONDS * 10, DELAY_MAX_SECONDS * 10) / 10
+        self._logger.debug(f"Adding random delay: {delay} seconds")
+        await asyncio.sleep(delay)
 
 
 class Historical(HistoricalEntity, SensorEntity):
@@ -299,4 +278,4 @@ async def async_setup_entry(
         ]
     }
 
-    add_entities(sensors.values(), update_before_add=True)
+    add_entities(sensors.values(), update_before_add=False)
