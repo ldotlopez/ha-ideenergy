@@ -51,11 +51,12 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):  # type: ignore[call
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.info = {}
+        self.api = None
 
-    @staticmethod
-    @callback
-    def async_get_options_flow(config_entry):
-        return OptionsFlowHandler(config_entry)
+    # @staticmethod
+    # @callback
+    # def async_get_options_flow(config_entry):
+    #     return OptionsFlowHandler(config_entry)
 
     async def async_step_user(
         self, user_input: Optional[dict[str, Any]] = None
@@ -63,80 +64,84 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):  # type: ignore[call
         """Handle a flow initialized by the user."""
         errors = {}
 
-        if user_input is not None:
-            await self.async_set_unique_id(user_input[CONF_NAME])
-            self._abort_if_unique_id_configured()
+        if user_input is None:
+            return self.async_show_form(
+                step_id="user", data_schema=AUTH_SCHEMA, errors=errors
+            )
 
-            try:
-                info = await validate_user_input(self.hass, user_input)
+        await self.async_set_unique_id(user_input[CONF_NAME])
+        self._abort_if_unique_id_configured()
 
-            except ideenergy.ClientError:
-                errors["base"] = "invalid_auth"
+        username = user_input[CONF_USERNAME]
+        password = user_input[CONF_PASSWORD]
 
-            except Exception:  # pylint: disable=broad-except
-                _LOGGER.exception("Unexpected exception")
-                errors["base"] = "unknown"
+        try:
+            self.api = await create_api(self.hass, username, password)
 
-            else:
-                self.info = info
-                self.info[CONF_NAME] = user_input.get(CONF_NAME, DEFAULT_NAME)
+        except ideenergy.ClientError:
+            errors["base"] = "invalid_auth"
 
-                return await self.async_step_contract()
-                # info[CONF_NAME] = user_input.get(CONF_NAME, DEFAULT_NAME)
-                # return self.async_create_entry(title=info[CONF_NAME], data=info)
+        except Exception:  # pylint: disable=broad-except
+            _LOGGER.exception("Unexpected exception")
+            errors["base"] = "unknown"
 
-        return self.async_show_form(
-            step_id="user", data_schema=AUTH_SCHEMA, errors=errors
-        )
+        else:
+            self.info.update(
+                {
+                    CONF_USERNAME: username,
+                    CONF_PASSWORD: password,
+                    CONF_NAME: user_input.get(CONF_NAME, DEFAULT_NAME),
+                }
+            )
+
+            return await self.async_step_contract()
 
     async def async_step_contract(
         self, user_input: Optional[dict[str, Any]] = None
     ) -> FlowResult:
-        contracts = await self.info["api"].get_contracts()
-        contracts = {x["direccion"]: x["codContrato"] for x in contracts}
+        contracts = await self.api.get_contracts()
+        contracts = {x["direccion"]: x for x in contracts}
 
         schema = vol.Schema({vol.Required(CONF_CONTRACT): vol.In(contracts.keys())})
 
         if not user_input:
             return self.async_show_form(step_id="contract", data_schema=schema)
 
-        self.info[CONF_CONTRACT] = contracts[user_input["contract"]]
-        self.info[CONF_NAME] = self.info[CONF_NAME] + "_" + self.info[CONF_CONTRACT]
+        contract = contracts[user_input["contract"]]
+        self.info.update(
+            {
+                CONF_CONTRACT: contract["codContrato"],
+                CONF_NAME: self.info[CONF_NAME] + "_" + contract["cups"],
+            }
+        )
 
         return self.async_create_entry(title=self.info[CONF_NAME], data=self.info)
 
 
-class OptionsFlowHandler(config_entries.OptionsFlow):
-    def __init__(self, config_entry):
-        """Initialize options flow."""
-        self.config_entry = config_entry
+# class OptionsFlowHandler(config_entries.OptionsFlow):
+#     def __init__(self, config_entry):
+#         """Initialize options flow."""
+#         self.config_entry = config_entry
 
-    async def async_step_init(self, user_input=None):
-        if user_input is not None:
-            return self.async_create_entry(title="", data=user_input)
+#     async def async_step_init(self, user_input=None):
+#         if user_input is not None:
+#             return self.async_create_entry(title="", data=user_input)
 
-        OPTIONS_SCHEMA = vol.Schema(
-            {
-                vol.Required(
-                    CONF_ENABLE_DIRECT_MEASURE,
-                    default=self.config_entry.options.get(CONF_ENABLE_DIRECT_MEASURE),
-                ): bool
-            }
-        )
+#         OPTIONS_SCHEMA = vol.Schema(
+#             {
+#                 vol.Required(
+#                     CONF_ENABLE_DIRECT_MEASURE,
+#                     default=self.config_entry.options.get(CONF_ENABLE_DIRECT_MEASURE),
+#                 ): bool
+#             }
+#         )
 
-        return self.async_show_form(step_id="init", data_schema=OPTIONS_SCHEMA)
+#         return self.async_show_form(step_id="init", data_schema=OPTIONS_SCHEMA)
 
 
-async def validate_user_input(hass, user_input):
-    username = user_input[CONF_USERNAME]
-    password = user_input[CONF_PASSWORD]
-
+async def create_api(hass, username, password):
     sess = async_create_clientsession(hass)
     client = ideenergy.Client(sess, username, password)
 
     await client.login()
-    return {
-        "api": client,
-        CONF_USERNAME: username,
-        CONF_PASSWORD: password,
-    }
+    return client

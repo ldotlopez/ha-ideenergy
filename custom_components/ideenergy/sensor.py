@@ -34,11 +34,7 @@ from homeassistant.components.sensor import (
     SensorEntity,
 )
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import (
-    CONF_NAME,
-    DEVICE_CLASS_ENERGY,
-    ENERGY_KILO_WATT_HOUR,
-)
+from homeassistant.const import CONF_NAME, DEVICE_CLASS_ENERGY, ENERGY_KILO_WATT_HOUR
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.event import async_track_time_change
@@ -59,9 +55,9 @@ from .historical_state import HistoricalEntity
 
 
 class IDEEnergyAccumulatedSensor(RestoreEntity, SensorEntity):
-    def __init__(self, name, api, unique_id, details, logger=_LOGGER):
+    def __init__(self, base_name, api, unique_id, details, logger=_LOGGER):
         self._logger = logger
-        self._name = name + "_consumed"
+        self._name = base_name + "_consumed"
         self._unique_id = unique_id
 
         # TODO: check serial as valid identifier
@@ -70,11 +66,13 @@ class IDEEnergyAccumulatedSensor(RestoreEntity, SensorEntity):
                 (DOMAIN, self.unique_id),
                 ("serial", str(details["listContador"][0]["numSerieEquipo"])),
             },
+            "name": details["cups"],
             "manufacturer": details["listContador"][0]["tipMarca"],
-            "name": self._name,
+            # "name": sanitize_address(details["direccion"]),
         }
 
         self._api = api
+        self._contact = str(details["codContrato"])
         self._state = None
         self._unsub_sched_update = None
 
@@ -191,6 +189,7 @@ class IDEEnergyAccumulatedSensor(RestoreEntity, SensorEntity):
 
     async def async_update(self):
         try:
+            await self._api.select_contract(self._contact)
             measure = await self._api.get_measure()
         except ideenergy.ClientError as e:
             self._logger.error(f"Error reading measure: {e}")
@@ -201,9 +200,9 @@ class IDEEnergyAccumulatedSensor(RestoreEntity, SensorEntity):
 
 
 class IDEEnergyHistoricalSensor(HistoricalEntity, SensorEntity):
-    def __init__(self, hass, name, api, unique_id, details, logger=_LOGGER):
+    def __init__(self, hass, base_name, api, unique_id, details, logger=_LOGGER):
         self._logger = logger
-        self._name = name + "_historical"
+        self._name = base_name + "_historical"
         self._unique_id = unique_id
 
         # TODO: check serial as valid identifier
@@ -213,10 +212,11 @@ class IDEEnergyHistoricalSensor(HistoricalEntity, SensorEntity):
                 ("serial", str(details["listContador"][0]["numSerieEquipo"])),
             },
             "manufacturer": details["listContador"][0]["tipMarca"],
-            "name": self._name,
+            "name": details["cups"],
         }
 
         self._api = api
+        self._contact = str(details["codContrato"])
 
     @property
     def unique_id(self):
@@ -270,6 +270,7 @@ class IDEEnergyHistoricalSensor(HistoricalEntity, SensorEntity):
         # 00:00 of the prev week
         start = end - timedelta(days=7)
 
+        await self._api.select_contract(self._contact)
         data = await self._api.get_consumption_period(start, end)
         data = [
             (
@@ -286,34 +287,25 @@ async def async_setup_entry(
     hass: HomeAssistant,
     config_entry: ConfigEntry,
     add_entities: AddEntitiesCallback,
-    discovery_info: Optional[
-        DiscoveryInfoType
-    ] = None,  # noqa DiscoveryInfoType | None
+    discovery_info: Optional[DiscoveryInfoType] = None,  # noqa DiscoveryInfoType | None
 ):
     api = hass.data[DOMAIN][config_entry.entry_id]
     details = await api.get_contract_details()
 
-    sensors = [
-        IDEEnergyHistoricalSensor(
-            hass=hass,
-            api=api,
-            name=config_entry.data[CONF_NAME].lower(),
-            unique_id=f"{config_entry.entry_id}-historical",
-            details=details,
-            logger=_LOGGER.getChild("historical"),
-        )
-    ]
+    historical = IDEEnergyHistoricalSensor(
+        hass=hass,
+        api=api,
+        base_name=config_entry.data[CONF_NAME].lower(),
+        unique_id=f"{config_entry.entry_id}-historical",
+        details=details,
+        logger=_LOGGER.getChild("historical"),
+    )
 
-    # Shouldn't this option be already set?
-    if config_entry.options.get(CONF_ENABLE_DIRECT_MEASURE, False):
-        sensors.append(
-            IDEEnergyAccumulatedSensor(
-                api=api,
-                name=config_entry.data[CONF_NAME].lower(),
-                unique_id=f"{config_entry.entry_id}-accumulated",
-                details=details,
-                logger=_LOGGER.getChild("accumulated"),
-            )
-        )
-
-    add_entities(sensors, update_before_add=True)
+    accumulated = IDEEnergyAccumulatedSensor(
+        api=api,
+        base_name=config_entry.data[CONF_NAME].lower(),
+        unique_id=f"{config_entry.entry_id}-accumulated",
+        details=details,
+        logger=_LOGGER.getChild("accumulated"),
+    )
+    add_entities([accumulated, historical], update_before_add=True)

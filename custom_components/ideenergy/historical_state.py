@@ -22,7 +22,6 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import Any, Iterable, Mapping, Optional
 
-from homeassistant.components.sensor import SensorEntity
 from homeassistant.core import MappingProxyType
 from homeassistant.helpers.entity import Entity
 from homeassistant.helpers.event import async_track_time_interval
