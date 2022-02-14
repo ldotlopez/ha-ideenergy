@@ -36,6 +36,7 @@ from homeassistant.components.sensor import (
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_NAME, DEVICE_CLASS_ENERGY, ENERGY_KILO_WATT_HOUR
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.event import async_track_time_change
 from homeassistant.helpers.restore_state import RestoreEntity
@@ -55,24 +56,14 @@ from .historical_state import HistoricalEntity
 
 
 class IDEEnergyAccumulatedSensor(RestoreEntity, SensorEntity):
-    def __init__(self, base_name, api, unique_id, details, logger=_LOGGER):
+    def __init__(self, unique_id, device_info, name, api, contract, logger=_LOGGER):
         self._logger = logger
-        self._name = base_name + "_consumed"
+        self._name = name
         self._unique_id = unique_id
 
-        # TODO: check serial as valid identifier
-        self._device_info = {
-            "identifiers": {
-                (DOMAIN, self.unique_id),
-                ("serial", str(details["listContador"][0]["numSerieEquipo"])),
-            },
-            "name": details["cups"],
-            "manufacturer": details["listContador"][0]["tipMarca"],
-            # "name": sanitize_address(details["direccion"]),
-        }
-
+        self._device_info = device_info
         self._api = api
-        self._contact = str(details["codContrato"])
+        self._contact = contract
         self._state = None
         self._unsub_sched_update = None
 
@@ -200,23 +191,13 @@ class IDEEnergyAccumulatedSensor(RestoreEntity, SensorEntity):
 
 
 class IDEEnergyHistoricalSensor(HistoricalEntity, SensorEntity):
-    def __init__(self, hass, base_name, api, unique_id, details, logger=_LOGGER):
+    def __init__(self, unique_id, device_info, name, api, contract, logger=_LOGGER):
         self._logger = logger
-        self._name = base_name + "_historical"
         self._unique_id = unique_id
-
-        # TODO: check serial as valid identifier
-        self._device_info = {
-            "identifiers": {
-                (DOMAIN, self.unique_id),
-                ("serial", str(details["listContador"][0]["numSerieEquipo"])),
-            },
-            "manufacturer": details["listContador"][0]["tipMarca"],
-            "name": details["cups"],
-        }
-
+        self._name = name
+        self._device_info = device_info
         self._api = api
-        self._contact = str(details["codContrato"])
+        self._contact = contract
 
     @property
     def unique_id(self):
@@ -292,20 +273,30 @@ async def async_setup_entry(
     api = hass.data[DOMAIN][config_entry.entry_id]
     details = await api.get_contract_details()
 
-    historical = IDEEnergyHistoricalSensor(
-        hass=hass,
-        api=api,
-        base_name=config_entry.data[CONF_NAME].lower(),
-        unique_id=f"{config_entry.entry_id}-historical",
-        details=details,
-        logger=_LOGGER.getChild("historical"),
+    device_info = DeviceInfo(
+        # TODO: check serial as valid identifier
+        identifiers={
+            # (DOMAIN, self.unique_id),
+            ("serial", str(details["listContador"][0]["numSerieEquipo"])),
+        },
+        name=details["cups"],
+        # "name": sanitize_address(details["direccion"]),
+        manufacturer=details["listContador"][0]["tipMarca"],
     )
 
-    accumulated = IDEEnergyAccumulatedSensor(
-        api=api,
-        base_name=config_entry.data[CONF_NAME].lower(),
-        unique_id=f"{config_entry.entry_id}-accumulated",
-        details=details,
-        logger=_LOGGER.getChild("accumulated"),
-    )
-    add_entities([accumulated, historical], update_before_add=True)
+    sensors = {
+        subtype: Sensor(
+            unique_id=f"{config_entry.entry_id}-{subtype}",
+            name=config_entry.data[CONF_NAME].lower() + f"_{subtype}",
+            device_info=device_info,
+            api=api,
+            contract=str(details["codContrato"]),
+            logger=_LOGGER.getChild(subtype),
+        )
+        for (Sensor, subtype) in [
+            (IDEEnergyHistoricalSensor, "historical"),
+            (IDEEnergyAccumulatedSensor, "accumulated"),
+        ]
+    }
+
+    add_entities(sensors.values(), update_before_add=True)
