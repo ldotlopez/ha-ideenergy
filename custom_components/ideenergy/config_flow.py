@@ -60,43 +60,44 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):  # type: ignore[call
         """Handle a flow initialized by the user."""
         errors = {}
 
-        if user_input is None:
-            return self.async_show_form(
-                step_id="user", data_schema=AUTH_SCHEMA, errors=errors
-            )
+        if user_input is not None:
+            await self.async_set_unique_id(user_input[CONF_NAME])
+            self._abort_if_unique_id_configured()
 
-        await self.async_set_unique_id(user_input[CONF_NAME])
-        self._abort_if_unique_id_configured()
+            username = user_input[CONF_USERNAME]
+            password = user_input[CONF_PASSWORD]
 
-        username = user_input[CONF_USERNAME]
-        password = user_input[CONF_PASSWORD]
+            try:
+                self.api = await create_api(self.hass, username, password)
 
-        try:
-            self.api = await create_api(self.hass, username, password)
+            except ideenergy.ClientError:
+                errors["base"] = "invalid_auth"
 
-        except ideenergy.ClientError:
-            errors["base"] = "invalid_auth"
+            except Exception:  # pylint: disable=broad-except
+                _LOGGER.exception("Unexpected exception")
+                errors["base"] = "unknown"
 
-        except Exception:  # pylint: disable=broad-except
-            _LOGGER.exception("Unexpected exception")
-            errors["base"] = "unknown"
+            else:
+                self.info.update(
+                    {
+                        CONF_USERNAME: username,
+                        CONF_PASSWORD: password,
+                        CONF_NAME: user_input.get(CONF_NAME, DEFAULT_NAME),
+                    }
+                )
+                return await self.async_step_contract()
 
-        else:
-            self.info.update(
-                {
-                    CONF_USERNAME: username,
-                    CONF_PASSWORD: password,
-                    CONF_NAME: user_input.get(CONF_NAME, DEFAULT_NAME),
-                }
-            )
-
-            return await self.async_step_contract()
+        return self.async_show_form(
+            step_id="user",
+            data_schema=AUTH_SCHEMA,
+            errors=errors,
+        )
 
     async def async_step_contract(
         self, user_input: Optional[dict[str, Any]] = None
     ) -> FlowResult:
         contracts = await self.api.get_contracts()
-        contracts = {x["direccion"]: x for x in contracts}
+        contracts = {f"{x['cups']} ({x['direccion']})": x for x in contracts}
 
         schema = vol.Schema({vol.Required(CONF_CONTRACT): vol.In(contracts.keys())})
 

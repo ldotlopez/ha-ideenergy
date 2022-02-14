@@ -1,6 +1,6 @@
 {
   "domain": "ideenergy",
-  "name": "i-de.es consumption energy sensor",
+  "name": "i-de.es energy sensors",
   "config_flow": true,
   "documentation": "https://github.com/ldotlopez/ha-ideenergy",
   "requirements": [
