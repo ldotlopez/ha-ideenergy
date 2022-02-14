@@ -20,18 +20,16 @@
 import logging
 from dataclasses import dataclass
 from datetime import datetime, timedelta
-from typing import Any, Iterable, Optional, Mapping
+from typing import Any, Iterable, Mapping, Optional
+
+from homeassistant.components.sensor import SensorEntity
 from homeassistant.core import MappingProxyType
 from homeassistant.helpers.entity import Entity
 from homeassistant.helpers.event import async_track_time_interval
 from homeassistant.helpers.storage import Store
 from homeassistant.util import dt as dt_util
 
-from .hack import (
-    _build_attributes,
-    _stringify_state,
-    async_set,
-)
+from .hack import _build_attributes, _stringify_state, async_set
 
 _LOGGER = logging.getLogger(__name__)
 STORE_LAST_UPDATE = "last_update"
@@ -67,9 +65,7 @@ class HistoricalEntity:
         if self.should_poll:
             raise Exception("poll model is not supported")
 
-        self.historical.state = Store(
-            hass=self.hass, version=1, key=self.entity_id
-        )
+        self.historical.state = Store(hass=self.hass, version=1, key=self.entity_id)
         await self.load_state()
 
         if not self.should_poll:
@@ -79,9 +75,7 @@ class HistoricalEntity:
 
         await self.flush_historical_log()
 
-        _LOGGER.debug(
-            f"HistoricalEntity ready, last entry: {self.historical.data!r}"
-        )
+        _LOGGER.debug(f"HistoricalEntity ready, last entry: {self.historical.data!r}")
 
     def historical_state(self):
         """Just in case the entity needs to implement state property"""
@@ -108,9 +102,7 @@ class HistoricalEntity:
             _LOGGER.warning("Entity not added to hass yet")
             return
 
-        self.historical.log = list(
-            sorted(self.historical.log, key=lambda x: x[0])
-        )
+        self.historical.log = list(sorted(self.historical.log, key=lambda x: x[0]))
 
         while True:
             try:
@@ -132,18 +124,14 @@ class HistoricalEntity:
                 _LOGGER.debug(f"Skip FUTURE for {value} @ {dt}")
                 continue
 
-            _LOGGER.debug(
-                f"Write historical state: {value} @ {dt} {attributes!r}"
-            )
+            _LOGGER.debug(f"Write historical state: {value} @ {dt} {attributes!r}")
             self.write_state_at_time(
                 value,
                 dt=dt,
                 attributes=attributes,
             )
 
-            await self.save_state(
-                {STORE_LAST_UPDATE: dt, STORE_LAST_STATE: value}
-            )
+            await self.save_state({STORE_LAST_UPDATE: dt, STORE_LAST_STATE: value})
 
     async def save_state(self, params):
         """Convenient function to store internal state"""
@@ -153,9 +141,7 @@ class HistoricalEntity:
 
         self.historical.data = data.copy()
 
-        data[STORE_LAST_UPDATE] = dt_util.as_utc(
-            data[STORE_LAST_UPDATE]
-        ).timestamp()
+        data[STORE_LAST_UPDATE] = dt_util.as_utc(data[STORE_LAST_UPDATE]).timestamp()
 
         await self.historical.state.async_save(data)
         return data

@@ -197,9 +197,7 @@ class IDEEnergyAccumulatedSensor(RestoreEntity, SensorEntity):
             return
 
         self._state = measure.accumulate
-        self._logger.info(
-            f"State updated: {self.state} {ENERGY_KILO_WATT_HOUR}"
-        )
+        self._logger.info(f"State updated: {self.state} {ENERGY_KILO_WATT_HOUR}")
 
 
 class IDEEnergyHistoricalSensor(HistoricalEntity, SensorEntity):
@@ -279,7 +277,7 @@ class IDEEnergyHistoricalSensor(HistoricalEntity, SensorEntity):
                 value / 1000,
                 {"last_reset": dt_util.as_utc(dt)},
             )
-            for (dt, value) in data['historical']
+            for (dt, value) in data["historical"]
         ]
         self.extend_historical_log(data)
 
