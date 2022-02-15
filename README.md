@@ -22,6 +22,7 @@ Through `custom_components` or [HACS](https://hacs.xyz/)
 ## Snapshots
 
 *Accumulated energy sensor*
+
 ![snapshot](screenshots/accumulated.png)
 
 *Historical energy sensor*

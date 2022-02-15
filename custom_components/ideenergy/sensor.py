@@ -174,7 +174,9 @@ class Accumulated(RestoreEntity, SensorEntity):
                     f"{self.state} {ENERGY_KILO_WATT_HOUR}"
                 )
             except ideenergy.ClientError as e:
+                # Error reading, force refresh in next update
                 self._logger.debug(f"async_update - Error reading measure: {e}.")
+                self._force_refresh = True
         else:
             self._logger.debug("async_update - discard update")
 

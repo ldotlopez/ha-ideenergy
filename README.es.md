@@ -24,6 +24,7 @@ A través de custom_components o [HACS](https://hacs.xyz/)
 ## Capturas
 
 *Sensor de energía acumulada*
+
 ![snapshot](screenshots/accumulated.png)
 
 *Sensor de histórico de energía*
