@@ -152,9 +152,6 @@ class Accumulated(RestoreEntity, SensorEntity):
         )
 
         self._logger.debug(f"async_update - now: {dt_util.as_local(dt_util.now())}")
-        self._logger.debug(
-            f"async_update - sensor last update:  {dt_util.as_local(self._last_update)}"
-        )
         self._logger.debug(f"async_update - force_refresh: {self._force_refresh}")
         self._logger.debug(
             f"async_update - update_window_is_open: {update_window_is_open}"
