@@ -3,6 +3,7 @@
   "name": "i-de.es energy sensors",
   "config_flow": true,
   "documentation": "https://github.com/ldotlopez/ha-ideenergy",
+  "issue_tracker": "https://github.com/ldotlopez/ha-ideenergy/issues",
   "requirements": [
     "ideenergy==0.0.7"
   ],
