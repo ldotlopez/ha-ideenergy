@@ -148,7 +148,7 @@ class Accumulated(RestoreEntity, SensorEntity):
         now = dt_util.as_utc(dt_util.now())
 
         update_window_is_open = (
-            UPDATE_BARRIER_MIN_MINUTE < now.minute < UPDATE_BARRIER_MAX_MINUTE
+            UPDATE_BARRIER_MIN_MINUTE <= now.minute <= UPDATE_BARRIER_MAX_MINUTE
         )
 
         self._logger.debug(f"async_update - now: {dt_util.as_local(dt_util.now())}")
