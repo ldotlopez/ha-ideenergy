@@ -72,7 +72,7 @@ class Accumulated(RestoreEntity, SensorEntity):
         self._contact = contract
 
         self._state = None
-        self._last_update = dt_util.utc_from_timestamp(0)
+        self._force_refresh = False
 
     @property
     def name(self):
@@ -122,6 +122,7 @@ class Accumulated(RestoreEntity, SensorEntity):
 
         if not state:
             self._logger.debug("No previous state, scheduling update")
+            self._force_refresh = True
             self.schedule_update_ha_state(force_refresh=True)
             return
 
@@ -138,6 +139,7 @@ class Accumulated(RestoreEntity, SensorEntity):
         except ValueError:
             # next_update = dt_util.as_local(dt_util.now() + SCAN_INTERVAL)
             self._logger.debug("Invalid previous state, scheduling update")
+            self._force_refresh = True
             # schedule_update_ha_state() is meant for push sensors but...
             self.schedule_update_ha_state(force_refresh=True)
             return
@@ -145,8 +147,6 @@ class Accumulated(RestoreEntity, SensorEntity):
     async def async_update(self):
         now = dt_util.as_utc(dt_util.now())
 
-        age = now - self._last_update
-        last_measure_is_too_old = age.total_seconds() > MEASURE_MAX_AGE
         update_window_is_open = (
             UPDATE_BARRIER_MIN_MINUTE < now.minute < UPDATE_BARRIER_MAX_MINUTE
         )
@@ -155,32 +155,28 @@ class Accumulated(RestoreEntity, SensorEntity):
         self._logger.debug(
             f"async_update - sensor last update:  {dt_util.as_local(self._last_update)}"
         )
-        self._logger.debug(
-            f"async_update - last_measure_is_too_old: {last_measure_is_too_old}"
-        )
+        self._logger.debug(f"async_update - force_refresh: {self._force_refresh}")
         self._logger.debug(
             f"async_update - update_window_is_open: {update_window_is_open}"
         )
 
-        if not last_measure_is_too_old and not update_window_is_open:
+        if self._force_refresh or update_window_is_open:
+            try:
+                self._logger.debug("async_update - Request measure")
+                await self._api.select_contract(self._contact)
+                measure = await self._api.get_measure()
+
+                self._state = measure.accumulate
+                self._force_refresh = False
+
+                self._logger.debug(
+                    "async_update - State updated: "
+                    f"{self.state} {ENERGY_KILO_WATT_HOUR}"
+                )
+            except ideenergy.ClientError as e:
+                self._logger.debug(f"async_update - Error reading measure: {e}.")
+        else:
             self._logger.debug("async_update - discard update")
-            return
-
-        try:
-            self._logger.debug(
-                "async_update - Requesting data to ICP, can take up to a minute"
-            )
-            await self._api.select_contract(self._contact)
-            measure = await self._api.get_measure()
-
-            self._state = measure.accumulate
-            self._last_update = now
-            self._logger.debug(
-                f"async_update - State updated: {self.state} {ENERGY_KILO_WATT_HOUR}"
-            )
-
-        except ideenergy.ClientError as e:
-            self._logger.debug(f"async_update - Error reading measure: {e}.")
 
         delay = random.randint(DELAY_MIN_SECONDS * 10, DELAY_MAX_SECONDS * 10) / 10
         self._logger.debug(f"async_update - Adding random delay: {delay} seconds")
