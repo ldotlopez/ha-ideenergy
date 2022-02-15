@@ -58,7 +58,7 @@ from .historical_state import HistoricalEntity
 
 # Half of the interval defined with UPDATE_BARRIER_MIN_MINUTE/MAX but bigger than the
 # request time to the ICP
-SCAN_INTERVAL = timedelta(seconds=15)
+SCAN_INTERVAL = timedelta(minutes=3)
 
 
 class Accumulated(RestoreEntity, SensorEntity):
@@ -121,7 +121,8 @@ class Accumulated(RestoreEntity, SensorEntity):
         state = await self.async_get_last_state()
 
         if not state:
-            self._logger.debug("No previous state")
+            self._logger.debug("No previous state, scheduling update")
+            self.schedule_update_ha_state(force_refresh=True)
             return
 
         try:
@@ -135,37 +136,54 @@ class Accumulated(RestoreEntity, SensorEntity):
             return
 
         except ValueError:
-            self._logger.debug("Invalid previous state")
+            # next_update = dt_util.as_local(dt_util.now() + SCAN_INTERVAL)
+            self._logger.debug("Invalid previous state, scheduling update")
+            # schedule_update_ha_state() is meant for push sensors but...
+            self.schedule_update_ha_state(force_refresh=True)
             return
 
     async def async_update(self):
         now = dt_util.as_utc(dt_util.now())
 
         age = now - self._last_update
-        is_old = age.seconds > MEASURE_MAX_AGE
-        update_window_open = (
-            UPDATE_BARRIER_MIN_MINUTE < now.second < UPDATE_BARRIER_MAX_MINUTE
+        last_measure_is_too_old = age.total_seconds() > MEASURE_MAX_AGE
+        update_window_is_open = (
+            UPDATE_BARRIER_MIN_MINUTE < now.minute < UPDATE_BARRIER_MAX_MINUTE
         )
 
-        if not (is_old and update_window_open):
-            self._logger.debug(
-                f"Skip update: age={age}, update_window_open={update_window_open}"
-            )
+        self._logger.debug(f"async_update - now: {dt_util.as_local(dt_util.now())}")
+        self._logger.debug(
+            f"async_update - sensor last update:  {dt_util.as_local(self._last_update)}"
+        )
+        self._logger.debug(
+            f"async_update - last_measure_is_too_old: {last_measure_is_too_old}"
+        )
+        self._logger.debug(
+            f"async_update - update_window_is_open: {update_window_is_open}"
+        )
+
+        if not last_measure_is_too_old and not update_window_is_open:
+            self._logger.debug("async_update - discard update")
             return
+
         try:
-            self._logger.debug("Requesting data to ICP, can take up to a minute")
+            self._logger.debug(
+                "async_update - Requesting data to ICP, can take up to a minute"
+            )
             await self._api.select_contract(self._contact)
             measure = await self._api.get_measure()
 
             self._state = measure.accumulate
             self._last_update = now
-            self._logger.debug(f"State updated: {self.state} {ENERGY_KILO_WATT_HOUR}")
+            self._logger.debug(
+                f"async_update - State updated: {self.state} {ENERGY_KILO_WATT_HOUR}"
+            )
 
         except ideenergy.ClientError as e:
-            self._logger.debug(f"Error reading measure: {e}.")
+            self._logger.debug(f"async_update - Error reading measure: {e}.")
 
         delay = random.randint(DELAY_MIN_SECONDS * 10, DELAY_MAX_SECONDS * 10) / 10
-        self._logger.debug(f"Adding random delay: {delay} seconds")
+        self._logger.debug(f"async_update - Adding random delay: {delay} seconds")
         await asyncio.sleep(delay)
 
 
@@ -220,6 +238,10 @@ class Historical(HistoricalEntity, SensorEntity):
     @property
     def last_reset(self):
         return None
+
+    @property
+    def entity_registry_enabled_default(self):
+        return False
 
     async def async_update(self):
         now = datetime.now()
