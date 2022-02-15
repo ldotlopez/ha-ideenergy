@@ -70,6 +70,7 @@ class HistoricalEntity:
         await self.load_state()
 
         if not self.should_poll:
+            await _execute_update()
             async_track_time_interval(
                 self.hass, _execute_update, timedelta(seconds=60 * 60 * 6)
             )
