@@ -14,4 +14,5 @@ Requires an **advanced** user on the distributors's website.
 * Accumulated consumption sensor.
 * Experimental sensor of historical consumption data.
 * Configuration through the [HomeAssistant web interface](https://developers.home-assistant.io/docs/config_entries_options_flow_handler) without the need to edit YAML files.
+* Update algorithm to read the ICP near the end of each hourly period (between minute 50 and 59) with a better representation of consumption in the HomeAssistant energy panel.
 * Fully [asynchronous](https://developers.home-assistant.io/docs/asyncio_index) and integrated with HomeAssistant.
