@@ -61,8 +61,11 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):  # type: ignore[call
         errors = {}
 
         if user_input is not None:
-            await self.async_set_unique_id(user_input[CONF_NAME])
-            self._abort_if_unique_id_configured()
+            # Not used correctly, check
+            # https://developers.home-assistant.io/docs/config_entries_config_flow_handler/#unique-ids
+            #
+            # await self.async_set_unique_id(user_input[CONF_NAME])
+            # self._abort_if_unique_id_configured()
 
             username = user_input[CONF_USERNAME]
             password = user_input[CONF_PASSWORD]
