@@ -25,12 +25,12 @@ import ideenergy
 import voluptuous as vol
 from homeassistant import config_entries
 from homeassistant.const import CONF_NAME, CONF_PASSWORD, CONF_USERNAME
-from homeassistant.core import callback
+from homeassistant.core import callback  # noqa: F401
 from homeassistant.data_entry_flow import FlowResult
 from homeassistant.helpers.aiohttp_client import async_create_clientsession
 
 from . import _LOGGER
-from .const import CONF_CONTRACT, CONF_ENABLE_DIRECT_MEASURE, DEFAULT_NAME, DOMAIN
+from .const import CONF_CONTRACT, DEFAULT_NAME, DOMAIN
 
 AUTH_SCHEMA = vol.Schema(
     {
@@ -119,20 +119,13 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):  # type: ignore[call
 #     def __init__(self, config_entry):
 #         """Initialize options flow."""
 #         self.config_entry = config_entry
-
+#
 #     async def async_step_init(self, user_input=None):
 #         if user_input is not None:
 #             return self.async_create_entry(title="", data=user_input)
-
-#         OPTIONS_SCHEMA = vol.Schema(
-#             {
-#                 vol.Required(
-#                     CONF_ENABLE_DIRECT_MEASURE,
-#                     default=self.config_entry.options.get(CONF_ENABLE_DIRECT_MEASURE),
-#                 ): bool
-#             }
-#         )
-
+#
+#         OPTIONS_SCHEMA = vol.Schema({})
+#
 #         return self.async_show_form(step_id="init", data_schema=OPTIONS_SCHEMA)
 
 

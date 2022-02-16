@@ -44,7 +44,6 @@ from homeassistant.util import dt as dt_util
 
 from . import _LOGGER
 from .const import (
-    CONF_ENABLE_DIRECT_MEASURE,
     DELAY_MAX_SECONDS,
     DELAY_MIN_SECONDS,
     DOMAIN,
