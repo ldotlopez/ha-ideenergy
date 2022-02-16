@@ -21,6 +21,7 @@
 # Maybe we need to mark some function as callback but I'm not sure whose.
 # from homeassistant.core import callback
 
+import enum
 import math
 from datetime import datetime, timedelta
 from typing import Optional
@@ -65,6 +66,11 @@ SCAN_INTERVAL = timedelta(seconds=scan_interval)
 
 _LOGGER.debug(f"update_window_width: {update_window_width} seconds")
 _LOGGER.debug(f"scan_interval: {SCAN_INTERVAL.total_seconds()} seconds")
+
+
+class UpdatePhase(enum.Enum):
+    SELECT_CONTRACT = enum.auto()
+    GET_MEASURE = enum.auto()
 
 
 class Accumulated(RestoreEntity, SensorEntity):
@@ -165,13 +171,17 @@ class Accumulated(RestoreEntity, SensorEntity):
 
         if self.barrier.allowed():
             try:
+                phase = UpdatePhase.SELECT_CONTRACT
                 await self._api.select_contract(self._contact)
+
+                phase = UpdatePhase.GET_MEASURE
                 measure = await self._api.get_measure()
+
                 self._state = measure.accumulate
                 self.barrier.sucess()
 
             except ideenergy.ClientError as e:
-                self._logger.debug(f"Error reading measure: {e}.")
+                self._logger.debug(f"Error in phase '{phase}': {e}")
                 self.barrier.fail()
 
         await self.barrier.delay()
