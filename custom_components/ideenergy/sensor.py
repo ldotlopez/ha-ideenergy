@@ -21,8 +21,7 @@
 # Maybe we need to mark some function as callback but I'm not sure whose.
 # from homeassistant.core import callback
 
-import asyncio
-import random
+import math
 from datetime import datetime, timedelta
 from typing import Optional
 
@@ -46,19 +45,27 @@ from homeassistant.util import dt as dt_util
 from . import _LOGGER
 from .const import (
     CONF_ENABLE_DIRECT_MEASURE,
+    DELAY_MAX_SECONDS,
+    DELAY_MIN_SECONDS,
     DOMAIN,
     HISTORICAL_MAX_AGE,
     MEASURE_MAX_AGE,
-    UPDATE_BARRIER_MAX_MINUTE,
-    UPDATE_BARRIER_MIN_MINUTE,
-    DELAY_MIN_SECONDS,
-    DELAY_MAX_SECONDS,
+    MIN_SCAN_INTERVAL,
+    UPDATE_WINDOW_START_MINUTE,
+    UPDATE_WINDOW_END_MINUTE,
+    MAX_RETRIES,
 )
 from .historical_state import HistoricalEntity
+from .barrier import Barrier
 
-# Half of the interval defined with UPDATE_BARRIER_MIN_MINUTE/MAX but bigger than the
-# request time to the ICP
-SCAN_INTERVAL = timedelta(minutes=3)
+# Adjust SCAN_INTERVAL to allow two updates within the update window
+update_window_width = UPDATE_WINDOW_END_MINUTE * 60 - UPDATE_WINDOW_START_MINUTE * 60
+scan_interval = math.floor(update_window_width / 2) - (DELAY_MAX_SECONDS * 2)
+scan_interval = max([MIN_SCAN_INTERVAL, scan_interval])
+SCAN_INTERVAL = timedelta(seconds=scan_interval)
+
+_LOGGER.debug(f"update_window_width: {update_window_width} seconds")
+_LOGGER.debug(f"scan_interval: {SCAN_INTERVAL.total_seconds()} seconds")
 
 
 class Accumulated(RestoreEntity, SensorEntity):
@@ -72,7 +79,14 @@ class Accumulated(RestoreEntity, SensorEntity):
         self._contact = contract
 
         self._state = None
-        self._force_refresh = False
+        self.barrier = Barrier(
+            update_window_start_minute=UPDATE_WINDOW_START_MINUTE,
+            update_window_end_minute=UPDATE_WINDOW_END_MINUTE,
+            max_retries=MAX_RETRIES,
+            max_age=MEASURE_MAX_AGE,
+            delay_min_seconds=DELAY_MIN_SECONDS,
+            delay_max_seconds=DELAY_MAX_SECONDS,
+        )
 
     @property
     def name(self):
@@ -118,68 +132,50 @@ class Accumulated(RestoreEntity, SensorEntity):
         return STATE_CLASS_TOTAL_INCREASING
 
     async def async_added_to_hass(self) -> None:
+        # Try to load previous state using RestoreEntity
+        #
+        # self.async_get_last_state().last_update is tricky and can't be trusted in our
+        # scenario. last_updated can be the last time HA exited because state is saved
+        # at exit with last_updated=exit_time, not last_updated=sensor_last_update
+        #
+        # It's easier to just load the value and schedule an update with
+        # schedule_update_ha_state() (which is meant for push sensors but...)
+
         state = await self.async_get_last_state()
 
         if not state:
-            self._logger.debug("No previous state, scheduling update")
-            self._force_refresh = True
-            self.schedule_update_ha_state(force_refresh=True)
-            return
+            self._logger.debug("No previous state")
 
-        try:
-            self._state = float(state.state)
-            self._last_update = state.last_updated
+        else:
+            try:
+                self._state = float(state.state)
+                self._logger.debug(
+                    f"Restored previous state: {self._state} {ENERGY_KILO_WATT_HOUR}"
+                )
 
-            dt = dt_util.as_local(self._last_update)
-            self._logger.debug(
-                f"Restored previous state: {self._state} {ENERGY_KILO_WATT_HOUR} ({dt})"
-            )
-            return
+            except ValueError:
+                self._logger.debug("Invalid previous state")
+                return
 
-        except ValueError:
-            # next_update = dt_util.as_local(dt_util.now() + SCAN_INTERVAL)
-            self._logger.debug("Invalid previous state, scheduling update")
-            self._force_refresh = True
-            # schedule_update_ha_state() is meant for push sensors but...
-            self.schedule_update_ha_state(force_refresh=True)
-            return
+        self.barrier.force_next()
+        self.schedule_update_ha_state(force_refresh=True)
 
     async def async_update(self):
-        now = dt_util.as_utc(dt_util.now())
+        # Delegate update window, forced updates, min/max age to the barrier
+        # If barrier allows the execution just call the API to read measure
 
-        update_window_is_open = (
-            UPDATE_BARRIER_MIN_MINUTE <= now.minute <= UPDATE_BARRIER_MAX_MINUTE
-        )
-
-        self._logger.debug(f"async_update - now: {dt_util.as_local(dt_util.now())}")
-        self._logger.debug(f"async_update - force_refresh: {self._force_refresh}")
-        self._logger.debug(
-            f"async_update - update_window_is_open: {update_window_is_open}"
-        )
-
-        if self._force_refresh or update_window_is_open:
+        if self.barrier.allowed():
             try:
-                self._logger.debug("async_update - Request measure")
                 await self._api.select_contract(self._contact)
                 measure = await self._api.get_measure()
-
                 self._state = measure.accumulate
-                self._force_refresh = False
+                self.barrier.sucess()
 
-                self._logger.debug(
-                    "async_update - State updated: "
-                    f"{self.state} {ENERGY_KILO_WATT_HOUR}"
-                )
             except ideenergy.ClientError as e:
-                # Error reading, force refresh in next update
-                self._logger.debug(f"async_update - Error reading measure: {e}.")
-                self._force_refresh = True
-        else:
-            self._logger.debug("async_update - discard update")
+                self._logger.debug(f"Error reading measure: {e}.")
+                self.barrier.fail()
 
-        delay = random.randint(DELAY_MIN_SECONDS * 10, DELAY_MAX_SECONDS * 10) / 10
-        self._logger.debug(f"async_update - Adding random delay: {delay} seconds")
-        await asyncio.sleep(delay)
+        await self.barrier.delay()
 
 
 class Historical(HistoricalEntity, SensorEntity):
