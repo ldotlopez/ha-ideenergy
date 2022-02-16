@@ -52,9 +52,7 @@ from homeassistant.core import (
 )
 from homeassistant.helpers.entity import Entity
 
-FLOAT_PRECISION = (
-    abs(int(math.floor(math.log10(abs(sys.float_info.epsilon))))) - 1
-)
+FLOAT_PRECISION = abs(int(math.floor(math.log10(abs(sys.float_info.epsilon))))) - 1
 
 
 # Modified version of
@@ -69,7 +67,7 @@ def async_set(
     attributes: Optional[Mapping[str, Any]] = None,
     force_update: bool = False,
     context: Optional[Context] = None,
-    time_fired: Optional[datetime.datetime] = None,
+    time_fired: Optional[datetime] = None,
 ) -> None:
     """Set the state of an entity, add entity if it does not exist.
 
@@ -120,6 +118,7 @@ def async_set(
 
 # Modified version of
 # homeassistant.helpers.entity.Entity._stringify_state
+# https://github.com/home-assistant/core/blob/dev/homeassistant/helpers/entity.py
 
 
 def _stringify_state(self: Entity, state: Any) -> str:
@@ -137,6 +136,7 @@ def _stringify_state(self: Entity, state: Any) -> str:
 
 # Code extracted and modified from
 # homeassistant.helpers.entity.Entity._async_write_ha_state
+# https://github.com/home-assistant/core/blob/dev/homeassistant/helpers/entity.py
 
 
 def _build_attributes(self: Entity, state: Any) -> Mapping[str, str]:

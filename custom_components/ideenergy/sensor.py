@@ -285,8 +285,8 @@ async def async_setup_entry(
             logger=_LOGGER.getChild(subtype),
         )
         for (Sensor, subtype) in [
-            (Historical, "historical"),
             (Accumulated, "accumulated"),
+            (Historical, "historical"),
         ]
     }
 
