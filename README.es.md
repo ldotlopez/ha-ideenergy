@@ -21,6 +21,8 @@ Require de un usuario **avanzado** en la página web del distribuidor.
 
 A través de custom_components o [HACS](https://hacs.xyz/)
 
+Aviso: El "API" de i-de no es muy fiable y en ocasiones no es posible acceder a la lectura del contador. Esta integración consulta el contador una vez cada hora reintentando hasta en 3 ocasiones la lectura si falla. Se aconseja dejar habilitada la extensión durante la noche o unas horas para obtener buenos resultados.
+
 ## Capturas
 
 *Sensor de energía acumulada*

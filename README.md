@@ -19,6 +19,8 @@ Requires an **advanced** user on the distributors's website.
 
 Through `custom_components` or [HACS](https://hacs.xyz/)
 
+Warning: i-de "API" is not very reliable and sometimes it is not possible to access the meter reading. This integration checks the meter once every hour, retrying the reading up to 3 times if it fails. It is advised to leave the extension enabled overnight or for a few hours to get good results.
+
 ## Snapshots
 
 *Accumulated energy sensor*
