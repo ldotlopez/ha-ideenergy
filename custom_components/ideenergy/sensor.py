@@ -59,18 +59,22 @@ from .historical_state import HistoricalEntity
 from .barrier import Barrier
 
 # Adjust SCAN_INTERVAL to allow two updates within the update window
+#
 update_window_width = UPDATE_WINDOW_END_MINUTE * 60 - UPDATE_WINDOW_START_MINUTE * 60
 scan_interval = math.floor(update_window_width / 2) - (DELAY_MAX_SECONDS * 2)
 scan_interval = max([MIN_SCAN_INTERVAL, scan_interval])
 SCAN_INTERVAL = timedelta(seconds=scan_interval)
 
-_LOGGER.debug(f"update_window_width: {update_window_width} seconds")
-_LOGGER.debug(f"scan_interval: {SCAN_INTERVAL.total_seconds()} seconds")
+_LOGGER.debug(
+    f"SCAN_INTERVAL configured to {SCAN_INTERVAL.total_seconds()} "
+    f"(update window width is {update_window_width} seconds)"
+)
 
 
 class UpdatePhase(enum.Enum):
+    LOGIN = enum.auto()
     SELECT_CONTRACT = enum.auto()
-    GET_MEASURE = enum.auto()
+    API_REQUEST = enum.auto()
 
 
 class Accumulated(RestoreEntity, SensorEntity):
@@ -84,7 +88,7 @@ class Accumulated(RestoreEntity, SensorEntity):
         self._contact = contract
 
         self._state = None
-        self.barrier = Barrier(
+        self._barrier = Barrier(
             update_window_start_minute=UPDATE_WINDOW_START_MINUTE,
             update_window_end_minute=UPDATE_WINDOW_END_MINUTE,
             max_retries=MAX_RETRIES,
@@ -160,31 +164,34 @@ class Accumulated(RestoreEntity, SensorEntity):
 
             except ValueError:
                 self._logger.debug("Invalid previous state")
-                return
 
-        self.barrier.force_next()
-        self.schedule_update_ha_state(force_refresh=True)
+        if self._state is None:
+            self._barrier.force_next()
+            self.schedule_update_ha_state(force_refresh=True)
 
     async def async_update(self):
         # Delegate update window, forced updates, min/max age to the barrier
         # If barrier allows the execution just call the API to read measure
 
-        if self.barrier.allowed():
+        if self._barrier.allowed():
             try:
+                phase = UpdatePhase.LOGIN
+                await self._api.login()
+
                 phase = UpdatePhase.SELECT_CONTRACT
                 await self._api.select_contract(self._contact)
 
-                phase = UpdatePhase.GET_MEASURE
+                phase = UpdatePhase.API_REQUEST
                 measure = await self._api.get_measure()
 
                 self._state = measure.accumulate
-                self.barrier.sucess()
+                self._barrier.sucess()
 
             except ideenergy.ClientError as e:
                 self._logger.debug(f"Error in phase '{phase}': {e}")
-                self.barrier.fail()
+                self._barrier.fail()
 
-        await self.barrier.delay()
+        await self._barrier.delay()
 
 
 class Historical(HistoricalEntity, SensorEntity):
@@ -252,8 +259,20 @@ class Historical(HistoricalEntity, SensorEntity):
         # 00:00 of the prev week
         start = end - timedelta(days=7)
 
-        await self._api.select_contract(self._contact)
-        data = await self._api.get_consumption_period(start, end)
+        try:
+            phase = UpdatePhase.LOGIN
+            await self._api.login()
+
+            phase = UpdatePhase.SELECT_CONTRACT
+            await self._api.select_contract(self._contact)
+
+            phase = UpdatePhase.API_REQUEST
+            data = await self._api.get_consumption_period(start, end)
+
+        except ideenergy.ClientError as e:
+            self._logger.debug(f"Error in phase '{phase}': {e}")
+            return
+
         data = [
             (
                 dt_util.as_utc(dt) + timedelta(hours=1),
@@ -272,17 +291,18 @@ async def async_setup_entry(
     discovery_info: Optional[DiscoveryInfoType] = None,  # noqa DiscoveryInfoType | None
 ):
     api = hass.data[DOMAIN][config_entry.entry_id]
-    details = await api.get_contract_details()
+
+    contract_details = await api.get_contract_details()
 
     device_info = DeviceInfo(
         # TODO: check serial as valid identifier
         identifiers={
             # (DOMAIN, self.unique_id),
-            ("serial", str(details["listContador"][0]["numSerieEquipo"])),
+            ("serial", str(contract_details["listContador"][0]["numSerieEquipo"])),
         },
-        name=details["cups"],
+        name=contract_details["cups"],
         # "name": sanitize_address(details["direccion"]),
-        manufacturer=details["listContador"][0]["tipMarca"],
+        manufacturer=contract_details["listContador"][0]["tipMarca"],
     )
 
     sensors = {
@@ -291,7 +311,7 @@ async def async_setup_entry(
             name=config_entry.data[CONF_NAME].lower() + f"_{subtype}",
             device_info=device_info,
             api=api,
-            contract=str(details["codContrato"]),
+            contract=str(contract_details["codContrato"]),
             logger=_LOGGER.getChild(subtype),
         )
         for (Sensor, subtype) in [

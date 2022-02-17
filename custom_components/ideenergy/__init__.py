@@ -48,8 +48,13 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         sess,
         entry.data[CONF_USERNAME],
         entry.data[CONF_PASSWORD],
-        logger=_LOGGER.getChild("client"),
+        logger=_LOGGER.getChild("api"),
     )
+
+    # Set user session timeout to 1 minute
+    # FIXME: Write an API for this in ideenergy module
+    hass.data[DOMAIN][entry.entry_id]._USER_SESSION_TIMEOUT = 60
+
     hass.config_entries.async_setup_platforms(entry, PLATFORMS)
 
     entry.async_on_unload(entry.add_update_listener(async_update_options))
