@@ -54,10 +54,11 @@ class Barrier:
 
         if self._failures >= self._max_retries:
             self._force_next = False
-
             self._cooldown = now + timedelta(seconds=self._max_age / 2)
+
             self._logger.debug(
-                f"Max failures reached, setup cooldown barrier until {self._cooldown}"
+                "Max failures reached, setup cooldown barrier until "
+                f"{dt_util.as_local(self._cooldown)}"
             )
 
     def allowed(self, now=None):
@@ -88,6 +89,10 @@ class Barrier:
                 f"({dt_util.as_local(self._cooldown)})"
             )
             return False
+
+        if self._failures > 0 and self._failures < self._max_retries:
+            self._logger.debug("Execution allowed: retrying")
+            return True
 
         if not update_window_is_open:
             self._logger.debug("Execution denied: update window is closed")
