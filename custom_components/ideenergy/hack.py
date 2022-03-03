@@ -23,7 +23,7 @@ from __future__ import annotations
 import math
 import sys
 from datetime import datetime
-from typing import Any, Optional, Mapping
+from typing import Any, Mapping, Optional
 
 from homeassistant.config import DATA_CUSTOMIZE
 from homeassistant.const import (
@@ -43,7 +43,6 @@ from homeassistant.const import (
 from homeassistant.core import (
     EVENT_STATE_CHANGED,
     Context,
-    MappingProxyType,
     EventOrigin,
     State,
     StateMachine,
@@ -57,6 +56,7 @@ FLOAT_PRECISION = abs(int(math.floor(math.log10(abs(sys.float_info.epsilon))))) 
 
 # Modified version of
 # homeassistant.core.StateMachine.async_set
+# https://github.com/home-assistant/core/blob/dev/homeassistant/core.py
 
 
 @callback
@@ -70,12 +70,9 @@ def async_set(
     time_fired: Optional[datetime] = None,
 ) -> None:
     """Set the state of an entity, add entity if it does not exist.
-
     Attributes is an optional dict to specify attributes of this state.
-
     If you just update the attributes and not the state, last changed will
     not be affected.
-
     This method must be run in the event loop.
     """
     entity_id = entity_id.lower()
@@ -87,7 +84,7 @@ def async_set(
         last_changed = None
     else:
         same_state = old_state.state == new_state and not force_update
-        same_attr = old_state.attributes == MappingProxyType(attributes)
+        same_attr = old_state.attributes == attributes
         last_changed = old_state.last_changed if same_state else None
 
     if same_state and same_attr:
