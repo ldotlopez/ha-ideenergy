@@ -7,6 +7,7 @@ name = "pypi"
 homeassistant = "*"
 
 [dev-packages]
+homeassistant = "*"
 
 [requires]
 python_version = "3"

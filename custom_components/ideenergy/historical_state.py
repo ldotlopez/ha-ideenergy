@@ -22,9 +22,7 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import Any, Iterable, Mapping, Optional
 
-from homeassistant.core import MappingProxyType
 from homeassistant.components.sensor.recorder import compile_statistics
-from homeassistant.core import MappingProxyType, callback
 from homeassistant.helpers.entity import Entity
 from homeassistant.helpers.event import async_track_time_interval
 from homeassistant.helpers.storage import Store
@@ -207,7 +205,7 @@ class HistoricalEntity:
         self: Entity,
         state: str,
         dt: Optional[datetime],
-        attributes: Optional[MappingProxyType] = None,
+        attributes: Optional[Mapping] = None,
     ):
         """
         Wrapper for the modified version of
