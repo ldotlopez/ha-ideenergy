@@ -126,10 +126,10 @@ class Accumulated(RestoreEntity, SensorEntity):
         return DEVICE_CLASS_ENERGY
 
     @property
-    def extra_state_attributes(self):
+    def extra_state_attributes(self):            
         return {
-            # ATTR_LAST_RESET: self.last_reset,
             ATTR_STATE_CLASS: self.state_class,
+            "Last Power Reading": self._instant,
         }
 
     # @property
