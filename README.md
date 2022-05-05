@@ -7,7 +7,7 @@
 
 [ideenergy](https://github.com/ldotlopez/ideenergy) integration for [home-assistant](home-assistant.io/)
 
-This integration provides sensors for spanish energy distributor [i-de](i-de.es).
+This integration provides sensors for spanish energy distributor [i-DE](i-de.es).
 Requires an **advanced** user on the distributors's website.
 
 ## Features

@@ -2,7 +2,7 @@
 
 Integración [ideenergy](https://github.com/ldotlopez/ideenergy) para [home-assistant](home-assistant.io/)
 
-Esta integración provee sensores para el distribuidor de energía español [i-de](i-de.es).
+Esta integración provee sensores para el distribuidor de energía español [i-DE](i-de.es).
 Require de un usuario **avanzado** en la página web del distribuidor.
 
 
