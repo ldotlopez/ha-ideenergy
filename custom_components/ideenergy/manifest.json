@@ -1,6 +1,6 @@
 {
   "domain": "ideenergy",
-  "name": "i-de.es energy sensors",
+  "name": "i-DE Energy Monitor",
   "config_flow": true,
   "documentation": "https://github.com/ldotlopez/ha-ideenergy",
   "issue_tracker": "https://github.com/ldotlopez/ha-ideenergy/issues",
