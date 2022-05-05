@@ -131,6 +131,7 @@ class Accumulated(RestoreEntity, SensorEntity):
         return {
             # ATTR_LAST_RESET: self.last_reset,
             ATTR_STATE_CLASS: self.state_class,
+            "Last Power Reading": self._instant,
         }
 
     # @property
