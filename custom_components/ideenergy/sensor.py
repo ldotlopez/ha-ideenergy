@@ -88,6 +88,7 @@ class Accumulated(RestoreEntity, SensorEntity):
         self._contact = contract
 
         self._state = None
+        self._instant = None
         self._barrier = Barrier(
             update_window_start_minute=UPDATE_WINDOW_START_MINUTE,
             update_window_end_minute=UPDATE_WINDOW_END_MINUTE,
@@ -130,6 +131,7 @@ class Accumulated(RestoreEntity, SensorEntity):
         return {
             # ATTR_LAST_RESET: self.last_reset,
             ATTR_STATE_CLASS: self.state_class,
+            "Last Power Reading": self._instant,
         }
 
     # @property
@@ -185,6 +187,7 @@ class Accumulated(RestoreEntity, SensorEntity):
                 measure = await self._api.get_measure()
 
                 self._state = measure.accumulate
+                self._instant = measure.instant
                 self._barrier.sucess()
 
             except ideenergy.ClientError as e:
