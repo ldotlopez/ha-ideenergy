@@ -22,6 +22,7 @@
 # from homeassistant.core import callback
 
 import enum
+import logging
 import math
 from datetime import datetime, timedelta
 from typing import Optional
@@ -42,44 +43,48 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.restore_state import RestoreEntity
 from homeassistant.helpers.typing import DiscoveryInfoType
 from homeassistant.util import dt as dt_util
+from homeassistant.const import STATE_UNKNOWN, STATE_UNAVAILABLE
 
 from . import _LOGGER
+from .barrier import Barrier
 from .const import (
+    ATTR_STATE_BARRIER,
     DELAY_MAX_SECONDS,
     DELAY_MIN_SECONDS,
     DOMAIN,
     HISTORICAL_MAX_AGE,
+    MAX_RETRIES,
     MEASURE_MAX_AGE,
     MIN_SCAN_INTERVAL,
-    UPDATE_WINDOW_START_MINUTE,
     UPDATE_WINDOW_END_MINUTE,
-    MAX_RETRIES,
+    UPDATE_WINDOW_START_MINUTE,
 )
 from .historical_state import HistoricalEntity, StateAtTimePoint
-from .barrier import Barrier
-
-# Adjust SCAN_INTERVAL to allow two updates within the update window
-#
-update_window_width = UPDATE_WINDOW_END_MINUTE * 60 - UPDATE_WINDOW_START_MINUTE * 60
-scan_interval = math.floor(update_window_width / 2) - (DELAY_MAX_SECONDS * 2)
-scan_interval = max([MIN_SCAN_INTERVAL, scan_interval])
-SCAN_INTERVAL = timedelta(seconds=scan_interval)
-
-_LOGGER.debug(
-    f"SCAN_INTERVAL configured to {SCAN_INTERVAL.total_seconds()} "
-    f"(update window width is {update_window_width} seconds)"
-)
 
 
-class UpdatePhase(enum.Enum):
-    LOGIN = enum.auto()
-    SELECT_CONTRACT = enum.auto()
-    API_REQUEST = enum.auto()
+def _get_scan_interval():
+    #
+    # Calculate SCAN_INTERVAL to allow two updates within the update window
+    #
+    update_window_width = (
+        UPDATE_WINDOW_END_MINUTE * 60 - UPDATE_WINDOW_START_MINUTE * 60
+    )
+    scan_interval = math.floor(update_window_width / 2) - (DELAY_MAX_SECONDS * 2)
+    scan_interval = max([MIN_SCAN_INTERVAL, scan_interval])
+    _LOGGER.debug(
+        f"SCAN_INTERVAL configured to {scan_interval} "
+        f"(update window width is {update_window_width} seconds)"
+    )
+
+    return scan_interval
+
+
+SCAN_INTERVAL = timedelta(seconds=_get_scan_interval())
 
 
 class Accumulated(RestoreEntity, SensorEntity):
-    def __init__(self, unique_id, device_info, name, api, contract, logger=_LOGGER):
-        self._logger = logger
+    def __init__(self, unique_id, device_info, name, api, contract, logger=None):
+        self._logger = logger or logging.getLogger(__name__)
         self._name = name
         self._unique_id = unique_id
 
@@ -96,6 +101,7 @@ class Accumulated(RestoreEntity, SensorEntity):
             max_age=MEASURE_MAX_AGE,
             delay_min_seconds=DELAY_MIN_SECONDS,
             delay_max_seconds=DELAY_MAX_SECONDS,
+            logger=self._logger.getChild("barrier"),
         )
 
     @property
@@ -129,14 +135,12 @@ class Accumulated(RestoreEntity, SensorEntity):
     @property
     def extra_state_attributes(self):
         return {
-            # ATTR_LAST_RESET: self.last_reset,
             ATTR_STATE_CLASS: self.state_class,
             "Last Power Reading": self._instant,
+            # ATTR_STATE_BARRIER: {
+            #     "barrier_" + k: v for (k, v) in self._barrier.attributes.items()
+            # },
         }
-
-    # @property
-    # def last_reset(self):
-    #     self._last_reset = dt_util.utc_from_timestamp(0)  # Deprecated
 
     @property
     def state_class(self):
