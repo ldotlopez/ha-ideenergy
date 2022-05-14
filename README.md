@@ -10,6 +10,8 @@
 This integration provides sensors for spanish energy distributor [i-DE](i-de.es).
 Requires an **advanced** user on the distributors's website.
 
+**⚠️ Make sure to read the 'warning' section**
+
 ## Features
 
 * Integration with the HomeAssistant energy panel.
@@ -38,3 +40,8 @@ Through `custom_components` or [HACS](https://hacs.xyz/)
 
 ![snapshot](screenshots/configuration-1.png)
 ![snapshot](screenshots/configuration-2.png)
+
+## Warnings
+This extension provides an 'historical' sensor to incorporate data from the past into Home Assistant database. For your own safety the sensor is not enabled by default and must be enabled manually.
+
+☠️ Historic sensor is based on a **high experimental hack** and can broke and/or corrupt your database and/or statistics. **Use at your own risk**.

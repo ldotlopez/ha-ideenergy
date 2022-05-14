@@ -5,6 +5,7 @@ Integración [ideenergy](https://github.com/ldotlopez/ideenergy) para [home-assi
 Esta integración provee sensores para el distribuidor de energía español [i-DE](i-de.es).
 Require de un usuario **avanzado** en la página web del distribuidor.
 
+**⚠️ Asegurese de leer la sección 'Advertencias'**
 
 ## Características
 
@@ -35,3 +36,8 @@ A través de custom_components o [HACS](https://hacs.xyz/)
 
 ![snapshot](screenshots/configuration-1.png)
 ![snapshot](screenshots/configuration-2.png)
+
+## Advertencias
+Esta integración provee un sensor 'histórico' que incorpora datos del pasado en la base de datos de Home Assistant. Por su propia seguridad este sensor no está habilitado y debe activarse manualmente.
+
+☠️ El sensor histórico está basado en un **hack extremadamente experimental** y puede romper y/o corromper su base de datos y/o estadísticas. **Use lo bajo su propio riesgo**.
