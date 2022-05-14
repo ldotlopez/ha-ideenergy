@@ -219,14 +219,6 @@ class Historical(HistoricalEntity, SensorEntity):
         return ENERGY_KILO_WATT_HOUR
 
     @property
-    def native_unit_of_measurement(self):
-        return ENERGY_KILO_WATT_HOUR
-
-    @property
-    def state(self):
-        return None
-
-    @property
     def device_info(self):
         return self._device_info
 
@@ -246,20 +238,11 @@ class Historical(HistoricalEntity, SensorEntity):
         return STATE_CLASS_MEASUREMENT
 
     @property
-    def last_reset(self):
-        return None
-
-    @property
     def entity_registry_enabled_default(self):
         return False
 
-    async def async_update(self):
-        now = datetime.now()
-
-        # 00:00 of today
-        end = now.replace(hour=0, minute=0, second=0, microsecond=0)
-
-        # 00:00 of the prev week
+    async def async_update_history(self):
+        end = datetime.today()
         start = end - timedelta(days=7)
 
         try:
@@ -270,21 +253,23 @@ class Historical(HistoricalEntity, SensorEntity):
             await self._api.select_contract(self._contact)
 
             phase = UpdatePhase.API_REQUEST
-            data = await self._api.get_consumption_period(start, end)
+            data = await self._api.get_historical_data(
+                ideenergy.HistoricalRequest.CONSUMPTION, start, end
+            )
 
         except ideenergy.ClientError as e:
             self._logger.debug(f"Error in phase '{phase}': {e}")
             return
 
         data = [
-            (
-                dt_util.as_utc(dt) + timedelta(hours=1),
-                value / 1000,
-                {"last_reset": dt_util.as_utc(dt)},
+            StateAtTimePoint(
+                state=value / 1000,
+                when=dt_util.as_utc(dt) + timedelta(hours=1),
+                attributes={"last_reset": dt_util.as_utc(dt)},
             )
             for (dt, value) in data["historical"]
         ]
-        self.extend_historical_log(data)
+        return data
 
 
 async def async_setup_entry(
