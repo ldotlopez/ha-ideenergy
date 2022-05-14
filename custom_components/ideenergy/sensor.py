@@ -158,20 +158,30 @@ class Accumulated(RestoreEntity, SensorEntity):
 
         state = await self.async_get_last_state()
 
-        if not state:
-            self._logger.debug("No previous state")
+        if (
+            not state
+            or state.state is None
+            or state.state == STATE_UNKNOWN
+            or state.state == STATE_UNAVAILABLE
+        ):
+            self._logger.debug("restore state: No previous state")
 
         else:
             try:
                 self._state = float(state.state)
                 self._logger.debug(
-                    f"Restored previous state: {self._state} {ENERGY_KILO_WATT_HOUR}"
+                    f"restore state: Got {self._state} {ENERGY_KILO_WATT_HOUR}"
                 )
 
             except ValueError:
-                self._logger.debug("Invalid previous state")
+                self._logger.debug(
+                    f"restore state: Discard invalid previous state {state!r}"
+                )
 
         if self._state is None:
+            self._logger.debug(
+                "restore state: No previous state: scheduling force update"
+            )
             self._barrier.force_next()
             self.schedule_update_ha_state(force_refresh=True)
 
@@ -262,7 +272,7 @@ class Historical(HistoricalEntity, SensorEntity):
             )
 
         except ideenergy.ClientError as e:
-            self._logger.debug(f"Error in phase '{phase}': {e}")
+            self._logger.debug(f"getting historical data: {e}")
             return
 
         data = [
