@@ -21,7 +21,6 @@
 # Maybe we need to mark some function as callback but I'm not sure whose.
 # from homeassistant.core import callback
 
-import enum
 import logging
 import math
 from datetime import datetime, timedelta
@@ -29,7 +28,6 @@ from typing import Optional
 
 import ideenergy
 from homeassistant.components.sensor import (
-    ATTR_LAST_RESET,
     ATTR_STATE_CLASS,
     STATE_CLASS_MEASUREMENT,
     STATE_CLASS_TOTAL_INCREASING,
@@ -48,18 +46,18 @@ from homeassistant.const import STATE_UNKNOWN, STATE_UNAVAILABLE
 from . import _LOGGER
 from .barrier import Barrier
 from .const import (
-    ATTR_STATE_BARRIER,
+    # ATTR_STATE_BARRIER,
     DELAY_MAX_SECONDS,
     DELAY_MIN_SECONDS,
     DOMAIN,
-    HISTORICAL_MAX_AGE,
+    # HISTORICAL_MAX_AGE,
     MAX_RETRIES,
     MEASURE_MAX_AGE,
     MIN_SCAN_INTERVAL,
     UPDATE_WINDOW_END_MINUTE,
     UPDATE_WINDOW_START_MINUTE,
 )
-from .historical_state import HistoricalEntity, StateAtTimePoint
+from .historical_state import HistoricalEntity, DatedState
 
 
 def _get_scan_interval():
@@ -146,6 +144,10 @@ class Accumulated(RestoreEntity, SensorEntity):
     def state_class(self):
         return STATE_CLASS_TOTAL_INCREASING
 
+    @property
+    def entity_registry_enabled_default(self):
+        return True
+
     async def async_added_to_hass(self) -> None:
         # Try to load previous state using RestoreEntity
         #
@@ -191,13 +193,6 @@ class Accumulated(RestoreEntity, SensorEntity):
 
         if self._barrier.allowed():
             try:
-                phase = UpdatePhase.LOGIN
-                await self._api.login()
-
-                phase = UpdatePhase.SELECT_CONTRACT
-                await self._api.select_contract(self._contact)
-
-                phase = UpdatePhase.API_REQUEST
                 measure = await self._api.get_measure()
 
                 self._state = measure.accumulate
@@ -205,15 +200,17 @@ class Accumulated(RestoreEntity, SensorEntity):
                 self._barrier.sucess()
 
             except ideenergy.ClientError as e:
-                self._logger.debug(f"Error in phase '{phase}': {e}")
+                self._logger.debug(f"Error reading measure: {e}")
                 self._barrier.fail()
 
         await self._barrier.delay()
 
 
 class Historical(HistoricalEntity, SensorEntity):
-    def __init__(self, unique_id, device_info, name, api, contract, logger=_LOGGER):
-        self._logger = logger
+    HISTORICAL_UPDATE_INTERVAL = timedelta(hours=6)
+
+    def __init__(self, unique_id, device_info, name, api, contract, logger=None):
+        self._logger = logger or logging.getLogger(__name__)
         self._unique_id = unique_id
         self._name = name
         self._device_info = device_info
@@ -243,7 +240,6 @@ class Historical(HistoricalEntity, SensorEntity):
     @property
     def extra_state_attributes(self):
         return {
-            ATTR_LAST_RESET: self.last_reset,
             ATTR_STATE_CLASS: self.state_class,
         }
 
@@ -253,20 +249,13 @@ class Historical(HistoricalEntity, SensorEntity):
 
     @property
     def entity_registry_enabled_default(self):
-        return False
+        return True
 
     async def async_update_history(self):
         end = datetime.today()
         start = end - timedelta(days=7)
 
         try:
-            phase = UpdatePhase.LOGIN
-            await self._api.login()
-
-            phase = UpdatePhase.SELECT_CONTRACT
-            await self._api.select_contract(self._contact)
-
-            phase = UpdatePhase.API_REQUEST
             data = await self._api.get_historical_data(
                 ideenergy.HistoricalRequest.CONSUMPTION, start, end
             )
@@ -276,13 +265,14 @@ class Historical(HistoricalEntity, SensorEntity):
             return
 
         data = [
-            StateAtTimePoint(
+            DatedState(
                 state=value / 1000,
                 when=dt_util.as_utc(dt) + timedelta(hours=1),
                 attributes={"last_reset": dt_util.as_utc(dt)},
             )
             for (dt, value) in data["historical"]
         ]
+
         return data
 
 

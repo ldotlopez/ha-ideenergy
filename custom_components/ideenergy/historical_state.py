@@ -18,124 +18,40 @@
 # USA.
 
 
-#
-#
-# Working code from ha-ideenergy (bus-based method) generates this data:
-#
-
-# state_id=17768045
-# domain=
-# entity_id=sensor.icp_es0021000002618134yh_historical
-# state=0.166
-# attributes=
-# event_id=
-#     event_id=18133720
-#     event_type=state_changed
-#     event_data=
-#     origin=LOCAL
-#     time_fired=2022-05-02 22:00:00.000000
-#     created=
-#     context_id=fcc29a6db8c26bc77893729f5dfa8305
-#     context_user_id=
-#     context_parent_id=
-# last_changed=2022-05-02 22:00:00.000000
-# last_updated=2022-05-02 22:00:00.000000
-# created=
-# context_id=
-# context_user_id=
-# old_state_id=17768044   # References similar stuff at 2022-05-02 22:00:00.000000
-# attributes_id=685157
-#     attributes_id=685157
-#     hash=994929976
-#     shared_attrs:str={"state_class":"measurement","last_reset":"2022-05-02T21:00:00+00:00","unit_of_measurement":"kWh","friendly_name":"icp_es0021000002618134yh_historical","device_class":"energy"}
-
-
-# Current code creates this data
-# state_id=50
-# entity_id=sensor.mcfly
-# state=106.8
-# attributes=
-# event_id=493
-#     event_id=493
-#     event_type=state_changed
-#     event_data={"new_state":{"entity_id":"sensor.mcfly","state":"106.8","attributes":{},"last_changed":"2022-05-03T15:22:00+00:00","last_updated":"2022-05-03T15:22:00+00:00","context":{"id":"c5c354e2ff37df5d798bacc319430ee5","parent_id":null,"user_id":null}},"entity_id":"sensor.mcfly"}
-#     origin=LOCAL
-#     time_fired=2022-05-03 15:22:00.000000,
-#     context_id=26998505e7597b1ce8a919dd3453937e
-#     context_user_id=
-#     context_parent_id=
-# last_changed=2022-05-03 15:20:00.000000
-# last_updated=2022-05-03 15:22:00.000000
-# old_state_id=49 # Similar stuff but for 2022-05-03 15:20:00.000000
-# attributes_id=
-
-"""
-select * from
-    states as st
-    inner join events as ev
-        on states.event_id = events.event_id
-    inner join state_attributes as sa
-        on states.attributes_id = state_attributes.attributes_id
-    where
-        state_id = (select max(state_id) from states where entity_id in ('sensor.mcfly','sensor.icp_es0021000002618134yh_accumulated') and state not in ('unknown', 'unavailable'));
-"""
-
-# state_id    domain      entity_id     state   attributes  event_id    last_changed                last_updated                created     context_id  context_user_id  old_state_id  attributes_id  event_id    event_type     event_data  origin      time_fired                  created     context_id                        context_user_id  context_parent_id  attributes_id  hash        shared_attrs
-# ----------  ----------  -------------------------------------------  ----------  ----------  ----------  --------------------------  --------------------------  ----------  ----------  ---------------  ------------  -------------  ----------  -------------  ----------  ----------  --------------------------  ----------  --------------------------------  ---------------  -----------------  -------------  ----------  --------------------------------------------------------------------------------------------------------------------
-# 17767877                sensor.mcfly  45825.0             18133551    2022-05-03 14:05:03.489654  2022-05-03 14:05:03.489654                                           17767875      144            18133551    state_changed              LOCAL       2022-05-03 14:05:03.489654              a315f2f229180984fdea1d081814b839                                      144            1502492789  {"state_class":"total_increasing","unit_of_measurement":"kWh","device_class":"energy","friendly_name":"icp_es0021000002618134yh_accumulated"}
-
-
-# state_id                entity_id     state   attributes  event_id   last_changed                last_updated                old_state_id  attributes_id  event_id  event_type     event_data  origin  time_fired                  context_id  context_user_id  context_parent_id  attributes_id  hash        shared_attrs
-# --------                ------------  ------  ----------  --------  --------------------------  --------------------------  ------------  -------------  --------  -------------  ----------  ------  --------------------------  ----------  ---------------  -----------------  -------------  ----------  --------------------------------------------------------------------------------------------------------------------------------------------------
-# 862                     sensor.mcfly  3348.0              3468        2022-05-04 07:00:00.000000  2022-05-04 07:00:00.000000  861           529            3468      state_changed                      2022-05-04 07:00:00.000000                                                  529            3236127255  {"state_class":"measurement","unit_of_measurement":"kWh","friendly_name":"mcfly","device_class":"energy","last_reset":"2022-05-04T06:00:00+00:00"}
-
 import functools
 import logging
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
-from typing import Any, Dict, Mapping, Optional
+from typing import Any, Dict
 
 from homeassistant import core
 from homeassistant.components import recorder
 from homeassistant.components.recorder import models
 from homeassistant.components.recorder.util import session_scope
-from homeassistant.components.sensor.recorder import compile_statistics
-from homeassistant.helpers.entity import Entity
 from homeassistant.helpers.event import async_track_time_interval
-from homeassistant.helpers.storage import Store
 from homeassistant.util import dt as dt_util
-from sqlalchemy import func as sql_func
 from sqlalchemy import or_, not_
 
-from .hack import _build_attributes, _stringify_state, async_set
+from .hack import _build_attributes, _stringify_state
 
 _LOGGER = logging.getLogger(__name__)
 
-# STORE_LAST_UPDATE = "last_update"
-# STORE_LAST_STATE = "last_state"
-
-
-# @dataclass
-# class HistoricalData:
-#     log: list[tuple[datetime, Any]]
-#     data: Mapping[str, Any]
-#     state: Store
-
-HISTORICAL_UPDATE_INTERVAL = timedelta(minutes=6)
-
 
 @dataclass
-class StateAtTimePoint:
+class DatedState:
     state: Any
     when: datetime
     attributes: Dict[str, Any]
 
 
+# You must know:
+# * DB keeps datetime object as utc
+# * Each time hass is started a new record is created, that record can be 'unknow'
+#   or 'unavailable'
+
+
 class HistoricalEntity:
-    # You must know:
-    # * DB keeps datetime object as utc
-    # * Each time hass is started a new record is created
-    # * That record can be 'unknow' or 'unavailable'
+    HISTORICAL_UPDATE_INTERVAL = timedelta(hours=12)
 
     async def async_update_history(self):
         _LOGGER.debug("You must override this method")
@@ -143,31 +59,15 @@ class HistoricalEntity:
 
     @property
     def should_poll(self):
-        """HistoricalEntities MUST NOT poll.
-        Polling creates incorrect states at intermediate time points.
-        """
+        # HistoricalEntities MUST NOT poll.
+        # Polling creates incorrect states at intermediate time points.
+
         return False
-
-    # @property
-    # def last_reset(self):
-    #     """Returning any else will cause discontinuities in history IDKW"""
-    #     return None
-
-    #     # Another aproach is to return data from historical entity, but causes
-    #     # wrong results. Keep here for reference
-    #     # FIXME: Write a proper method to access HistoricalEntity internal
-    #     # state
-    #     #
-    #     # try:
-    #     #     return self.historical.data[STORE_LAST_UPDATE]
-    #     # except KeyError:
-    #     #     return None
 
     @property
     def state(self):
         # Better report unavailable than anything
-        return None
-
+        #
         # Another aproach is to return data from historical entity, but causes
         # wrong results. Keep here for reference.
         #
@@ -177,6 +77,8 @@ class HistoricalEntity:
         # if state := self.historical_state():
         #     return float(state)
 
+        return None
+
     # @property
     # def available(self):
     #     # Leave us alone!
@@ -184,7 +86,7 @@ class HistoricalEntity:
 
     async def _run_async_update_history(self, now=None) -> None:
         def _normalize_time_state(st):
-            if not isinstance(st, StateAtTimePoint):
+            if not isinstance(st, DatedState):
                 return None
 
             if st.when.tzinfo is None:
@@ -225,39 +127,20 @@ class HistoricalEntity:
         if self.should_poll:
             raise Exception("poll model is not supported")
 
-        _LOGGER.debug(f"{self.entity_id} ready")  # type: ignore[attr-defined]
-
         self.recorder = recorder.get_instance(self.hass)  # type: ignore[attr-defined]
-        self.recorder.async_add_executor_job(self._recorder_cleanup)
+
+        _LOGGER.debug(f"{self.entity_id}: added to hass")  # type: ignore[attr-defined]
 
         await self._run_async_update_history()
         async_track_time_interval(
             self.hass,  # type: ignore[attr-defined]
             self._run_async_update_history,
-            HISTORICAL_UPDATE_INTERVAL,
+            self.HISTORICAL_UPDATE_INTERVAL,
         )
-        _LOGGER.debug(f"{self.entity_id} ready")  # type: ignore[attr-defined]
-
-    def _recorder_cleanup(self):
-        pass
-        # with session_scope(session=self.recorder.get_session()) as session:
-        #     invalid_states = (
-        #         session.query(models.States)
-        #         .filter(models.States.entity_id == self.entity_id)
-        #         .filter(
-        #             or_(
-        #                 models.States.state == "unknown",
-        #                 models.States.state == "unavailable",
-        #             )
-        #         )
-        #     )
-
-        #     if invalid_states.count():
-        #         _LOGGER.debug(
-        #             f"Deleted {invalid_states.count()} invalid states from recorder"
-        #         )
-        #         invalid_states.delete()
-        #         session.commit()
+        _LOGGER.debug(
+            f"{self.entity_id}: "  # type: ignore[attr-defined]
+            f"updating each {self.HISTORICAL_UPDATE_INTERVAL.total_seconds()} seconds"
+        )
 
     def _recorder_write_states(self, states_at_dt):
         _LOGGER.debug("Writing states on recorder")
@@ -324,10 +207,6 @@ class HistoricalEntity:
                 f"Extending from {states_at_dt[0].when} to {states_at_dt[-1].when}"
             )
 
-            # Hack to force stats
-            # if first_run:
-            #     states_at_dt = [states_at_dt[0]]
-
             #
             # Build recorder State, StateAttributes and Event
             #
@@ -362,8 +241,3 @@ class HistoricalEntity:
             session.commit()
 
             _LOGGER.debug(f"Added {len(db_states)} to database")
-
-            # if first_run:
-            #     from homeassistant.components.recorder import statistics
-
-            #     statistics.compile_statistics(self.recorder, db_states[0].last_updated)
