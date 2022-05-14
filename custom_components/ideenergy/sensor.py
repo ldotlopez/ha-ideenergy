@@ -55,7 +55,7 @@ from .const import (
     UPDATE_WINDOW_END_MINUTE,
     MAX_RETRIES,
 )
-from .historical_state import HistoricalEntity
+from .historical_state import HistoricalEntity, StateAtTimePoint
 from .barrier import Barrier
 
 # Adjust SCAN_INTERVAL to allow two updates within the update window
