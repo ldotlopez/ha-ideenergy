@@ -7,7 +7,7 @@
   "requirements": [
     "ideenergy==1.0.0a1"
   ],
-  "dependencies": [],
+  "dependencies": ["recorder"],
   "codeowners": [
     "@ldotlopez"
   ],
