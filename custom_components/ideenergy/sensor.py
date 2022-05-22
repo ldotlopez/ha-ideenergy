@@ -81,14 +81,13 @@ SCAN_INTERVAL = timedelta(seconds=_get_scan_interval())
 
 
 class Accumulated(RestoreEntity, SensorEntity):
-    def __init__(self, unique_id, device_info, name, api, contract, logger=None):
+    def __init__(self, unique_id, device_info, name, api, logger=None):
         self._logger = logger or logging.getLogger(__name__)
         self._name = name
         self._unique_id = unique_id
 
         self._device_info = device_info
         self._api = api
-        self._contact = contract
 
         self._state = None
         self._instant = None
@@ -206,16 +205,15 @@ class Accumulated(RestoreEntity, SensorEntity):
         await self._barrier.delay()
 
 
-class Historical(HistoricalEntity, SensorEntity):
+class Consumption(HistoricalEntity, SensorEntity):
     HISTORICAL_UPDATE_INTERVAL = timedelta(hours=6)
 
-    def __init__(self, unique_id, device_info, name, api, contract, logger=None):
+    def __init__(self, unique_id, device_info, name, api, logger=None):
         self._logger = logger or logging.getLogger(__name__)
         self._unique_id = unique_id
         self._name = name
         self._device_info = device_info
         self._api = api
-        self._contact = contract
 
     @property
     def unique_id(self):
@@ -303,12 +301,11 @@ async def async_setup_entry(
             name=config_entry.data[CONF_NAME].lower() + f"_{subtype}",
             device_info=device_info,
             api=api,
-            contract=str(contract_details["codContrato"]),
             logger=_LOGGER.getChild(subtype),
         )
         for (Sensor, subtype) in [
             (Accumulated, "accumulated"),
-            (Historical, "historical"),
+            (Consumption, "historical"),
         ]
     }
 
