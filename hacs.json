@@ -1,6 +1,5 @@
 {
   "name": "i-DE Energy Monitor",
   "render_readme": true,
-  "domains": ["sensor"],
   "content_in_root": false
 }
