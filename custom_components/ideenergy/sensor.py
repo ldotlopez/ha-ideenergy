@@ -21,14 +21,13 @@
 # Maybe we need to mark some function as callback but I'm not sure whose.
 # from homeassistant.core import callback
 
-import enum
+import logging
 import math
 from datetime import datetime, timedelta
 from typing import Optional
 
 import ideenergy
 from homeassistant.components.sensor import (
-    ATTR_LAST_RESET,
     ATTR_STATE_CLASS,
     STATE_CLASS_MEASUREMENT,
     STATE_CLASS_TOTAL_INCREASING,
@@ -42,52 +41,56 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.restore_state import RestoreEntity
 from homeassistant.helpers.typing import DiscoveryInfoType
 from homeassistant.util import dt as dt_util
+from homeassistant.const import STATE_UNKNOWN, STATE_UNAVAILABLE
 
 from . import _LOGGER
+from .barrier import Barrier
 from .const import (
+    # ATTR_STATE_BARRIER,
     DELAY_MAX_SECONDS,
     DELAY_MIN_SECONDS,
     DOMAIN,
-    HISTORICAL_MAX_AGE,
+    # HISTORICAL_MAX_AGE,
+    MAX_RETRIES,
     MEASURE_MAX_AGE,
     MIN_SCAN_INTERVAL,
-    UPDATE_WINDOW_START_MINUTE,
     UPDATE_WINDOW_END_MINUTE,
-    MAX_RETRIES,
+    UPDATE_WINDOW_START_MINUTE,
 )
-from .historical_state import HistoricalEntity
-from .barrier import Barrier
-
-# Adjust SCAN_INTERVAL to allow two updates within the update window
-#
-update_window_width = UPDATE_WINDOW_END_MINUTE * 60 - UPDATE_WINDOW_START_MINUTE * 60
-scan_interval = math.floor(update_window_width / 2) - (DELAY_MAX_SECONDS * 2)
-scan_interval = max([MIN_SCAN_INTERVAL, scan_interval])
-SCAN_INTERVAL = timedelta(seconds=scan_interval)
-
-_LOGGER.debug(
-    f"SCAN_INTERVAL configured to {SCAN_INTERVAL.total_seconds()} "
-    f"(update window width is {update_window_width} seconds)"
-)
+from .historical_state import HistoricalEntity, DatedState
 
 
-class UpdatePhase(enum.Enum):
-    LOGIN = enum.auto()
-    SELECT_CONTRACT = enum.auto()
-    API_REQUEST = enum.auto()
+def _get_scan_interval():
+    #
+    # Calculate SCAN_INTERVAL to allow two updates within the update window
+    #
+    update_window_width = (
+        UPDATE_WINDOW_END_MINUTE * 60 - UPDATE_WINDOW_START_MINUTE * 60
+    )
+    scan_interval = math.floor(update_window_width / 2) - (DELAY_MAX_SECONDS * 2)
+    scan_interval = max([MIN_SCAN_INTERVAL, scan_interval])
+    _LOGGER.debug(
+        f"SCAN_INTERVAL configured to {scan_interval} "
+        f"(update window width is {update_window_width} seconds)"
+    )
+
+    return scan_interval
+
+
+SCAN_INTERVAL = timedelta(seconds=_get_scan_interval())
 
 
 class Accumulated(RestoreEntity, SensorEntity):
-    def __init__(self, unique_id, device_info, name, api, contract, logger=_LOGGER):
-        self._logger = logger
+    def __init__(self, unique_id, device_info, name, api, logger=None):
+        self._logger = logger or logging.getLogger(__name__)
         self._name = name
         self._unique_id = unique_id
 
         self._device_info = device_info
         self._api = api
-        self._contact = contract
 
         self._state = None
+        self._instant = None
         self._barrier = Barrier(
             update_window_start_minute=UPDATE_WINDOW_START_MINUTE,
             update_window_end_minute=UPDATE_WINDOW_END_MINUTE,
@@ -95,6 +98,7 @@ class Accumulated(RestoreEntity, SensorEntity):
             max_age=MEASURE_MAX_AGE,
             delay_min_seconds=DELAY_MIN_SECONDS,
             delay_max_seconds=DELAY_MAX_SECONDS,
+            logger=self._logger.getChild("barrier"),
         )
 
     @property
@@ -128,17 +132,20 @@ class Accumulated(RestoreEntity, SensorEntity):
     @property
     def extra_state_attributes(self):
         return {
-            # ATTR_LAST_RESET: self.last_reset,
             ATTR_STATE_CLASS: self.state_class,
+            "Last Power Reading": self._instant,
+            # ATTR_STATE_BARRIER: {
+            #     "barrier_" + k: v for (k, v) in self._barrier.attributes.items()
+            # },
         }
-
-    # @property
-    # def last_reset(self):
-    #     self._last_reset = dt_util.utc_from_timestamp(0)  # Deprecated
 
     @property
     def state_class(self):
         return STATE_CLASS_TOTAL_INCREASING
+
+    @property
+    def entity_registry_enabled_default(self):
+        return True
 
     async def async_added_to_hass(self) -> None:
         # Try to load previous state using RestoreEntity
@@ -152,20 +159,30 @@ class Accumulated(RestoreEntity, SensorEntity):
 
         state = await self.async_get_last_state()
 
-        if not state:
-            self._logger.debug("No previous state")
+        if (
+            not state
+            or state.state is None
+            or state.state == STATE_UNKNOWN
+            or state.state == STATE_UNAVAILABLE
+        ):
+            self._logger.debug("restore state: No previous state")
 
         else:
             try:
                 self._state = float(state.state)
                 self._logger.debug(
-                    f"Restored previous state: {self._state} {ENERGY_KILO_WATT_HOUR}"
+                    f"restore state: Got {self._state} {ENERGY_KILO_WATT_HOUR}"
                 )
 
             except ValueError:
-                self._logger.debug("Invalid previous state")
+                self._logger.debug(
+                    f"restore state: Discard invalid previous state {state!r}"
+                )
 
         if self._state is None:
+            self._logger.debug(
+                "restore state: No previous state: scheduling force update"
+            )
             self._barrier.force_next()
             self.schedule_update_ha_state(force_refresh=True)
 
@@ -175,33 +192,28 @@ class Accumulated(RestoreEntity, SensorEntity):
 
         if self._barrier.allowed():
             try:
-                phase = UpdatePhase.LOGIN
-                await self._api.login()
-
-                phase = UpdatePhase.SELECT_CONTRACT
-                await self._api.select_contract(self._contact)
-
-                phase = UpdatePhase.API_REQUEST
                 measure = await self._api.get_measure()
 
                 self._state = measure.accumulate
+                self._instant = measure.instant
                 self._barrier.sucess()
 
             except ideenergy.ClientError as e:
-                self._logger.debug(f"Error in phase '{phase}': {e}")
+                self._logger.debug(f"Error reading measure: {e}")
                 self._barrier.fail()
 
         await self._barrier.delay()
 
 
-class Historical(HistoricalEntity, SensorEntity):
-    def __init__(self, unique_id, device_info, name, api, contract, logger=_LOGGER):
-        self._logger = logger
+class Consumption(HistoricalEntity, SensorEntity):
+    HISTORICAL_UPDATE_INTERVAL = timedelta(hours=6)
+
+    def __init__(self, unique_id, device_info, name, api, logger=None):
+        self._logger = logger or logging.getLogger(__name__)
         self._unique_id = unique_id
         self._name = name
         self._device_info = device_info
         self._api = api
-        self._contact = contract
 
     @property
     def unique_id(self):
@@ -216,14 +228,6 @@ class Historical(HistoricalEntity, SensorEntity):
         return ENERGY_KILO_WATT_HOUR
 
     @property
-    def native_unit_of_measurement(self):
-        return ENERGY_KILO_WATT_HOUR
-
-    @property
-    def state(self):
-        return None
-
-    @property
     def device_info(self):
         return self._device_info
 
@@ -234,7 +238,6 @@ class Historical(HistoricalEntity, SensorEntity):
     @property
     def extra_state_attributes(self):
         return {
-            ATTR_LAST_RESET: self.last_reset,
             ATTR_STATE_CLASS: self.state_class,
         }
 
@@ -243,45 +246,32 @@ class Historical(HistoricalEntity, SensorEntity):
         return STATE_CLASS_MEASUREMENT
 
     @property
-    def last_reset(self):
-        return None
-
-    @property
     def entity_registry_enabled_default(self):
-        return False
+        return True
 
-    async def async_update(self):
-        now = datetime.now()
-
-        # 00:00 of today
-        end = now.replace(hour=0, minute=0, second=0, microsecond=0)
-
-        # 00:00 of the prev week
+    async def async_update_history(self):
+        end = datetime.today()
         start = end - timedelta(days=7)
 
         try:
-            phase = UpdatePhase.LOGIN
-            await self._api.login()
-
-            phase = UpdatePhase.SELECT_CONTRACT
-            await self._api.select_contract(self._contact)
-
-            phase = UpdatePhase.API_REQUEST
-            data = await self._api.get_consumption_period(start, end)
+            data = await self._api.get_historical_data(
+                ideenergy.HistoricalRequest.CONSUMPTION, start, end
+            )
 
         except ideenergy.ClientError as e:
-            self._logger.debug(f"Error in phase '{phase}': {e}")
+            self._logger.debug(f"getting historical data: {e}")
             return
 
         data = [
-            (
-                dt_util.as_utc(dt) + timedelta(hours=1),
-                value / 1000,
-                {"last_reset": dt_util.as_utc(dt)},
+            DatedState(
+                state=value / 1000,
+                when=dt_util.as_utc(dt) + timedelta(hours=1),
+                attributes={"last_reset": dt_util.as_utc(dt)},
             )
             for (dt, value) in data["historical"]
         ]
-        self.extend_historical_log(data)
+
+        return data
 
 
 async def async_setup_entry(
@@ -311,12 +301,11 @@ async def async_setup_entry(
             name=config_entry.data[CONF_NAME].lower() + f"_{subtype}",
             device_info=device_info,
             api=api,
-            contract=str(contract_details["codContrato"]),
             logger=_LOGGER.getChild(subtype),
         )
         for (Sensor, subtype) in [
             (Accumulated, "accumulated"),
-            (Historical, "historical"),
+            (Consumption, "historical"),
         ]
     }
 

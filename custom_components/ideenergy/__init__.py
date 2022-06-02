@@ -29,7 +29,7 @@ from homeassistant.const import CONF_USERNAME, CONF_PASSWORD
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
-from .const import DOMAIN
+from .const import DOMAIN, CONF_CONTRACT, API_USER_SESSION_TIMEOUT
 
 import ideenergy
 
@@ -41,19 +41,15 @@ _LOGGER = logging.getLogger(__name__)
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up i-de.es sensor from a config entry."""
-
     sess = async_get_clientsession(hass)
     hass.data[DOMAIN] = hass.data.get(DOMAIN, {})
     hass.data[DOMAIN][entry.entry_id] = ideenergy.Client(
-        sess,
-        entry.data[CONF_USERNAME],
-        entry.data[CONF_PASSWORD],
-        logger=_LOGGER.getChild("api"),
+        session=sess,
+        username=entry.data[CONF_USERNAME],
+        password=entry.data[CONF_PASSWORD],
+        contract=entry.data[CONF_CONTRACT],
+        user_session_timeout=API_USER_SESSION_TIMEOUT,
     )
-
-    # Set user session timeout to 1 minute
-    # FIXME: Write an API for this in ideenergy module
-    hass.data[DOMAIN][entry.entry_id]._USER_SESSION_TIMEOUT = 60
 
     hass.config_entries.async_setup_platforms(entry, PLATFORMS)
 

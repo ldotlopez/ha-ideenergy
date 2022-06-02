@@ -17,38 +17,106 @@
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301,
 # USA.
 
+
+import functools
 import logging
 from dataclasses import dataclass
-from datetime import datetime, timedelta
-from typing import Any, Iterable, Mapping, Optional
+from datetime import datetime, timedelta, timezone
+from typing import Any, Dict
 
-from homeassistant.components.sensor.recorder import compile_statistics
-from homeassistant.helpers.entity import Entity
+from homeassistant import core
+from homeassistant.components import recorder
+from homeassistant.components.recorder import models
+from homeassistant.components.recorder.util import session_scope
 from homeassistant.helpers.event import async_track_time_interval
-from homeassistant.helpers.storage import Store
 from homeassistant.util import dt as dt_util
+from sqlalchemy import or_, not_
 
-from .hack import _build_attributes, _stringify_state, async_set
+from .hack import _build_attributes, _stringify_state
 
 _LOGGER = logging.getLogger(__name__)
-STORE_LAST_UPDATE = "last_update"
-STORE_LAST_STATE = "last_state"
 
 
 @dataclass
-class HistoricalData:
-    log: list[tuple[datetime, Any]]
-    data: Mapping[str, Any]
-    state: Store
+class DatedState:
+    state: Any
+    when: datetime
+    attributes: Dict[str, Any]
+
+
+# You must know:
+# * DB keeps datetime object as utc
+# * Each time hass is started a new record is created, that record can be 'unknow'
+#   or 'unavailable'
 
 
 class HistoricalEntity:
+    HISTORICAL_UPDATE_INTERVAL = timedelta(hours=12)
+
+    async def async_update_history(self):
+        _LOGGER.debug("You must override this method")
+        return []
+
     @property
     def should_poll(self):
-        """HistoricalEntities MUST NOT poll.
-        Polling creates incorrect states at intermediate time points.
-        """
+        # HistoricalEntities MUST NOT poll.
+        # Polling creates incorrect states at intermediate time points.
+
         return False
+
+    @property
+    def state(self):
+        # Better report unavailable than anything
+        #
+        # Another aproach is to return data from historical entity, but causes
+        # wrong results. Keep here for reference.
+        #
+        # HistoricalEntities doesnt' pull but state is accessed only once when
+        # the sensor is registered for the first time in the database
+        #
+        # if state := self.historical_state():
+        #     return float(state)
+
+        return None
+
+    # @property
+    # def available(self):
+    #     # Leave us alone!
+    #     return False
+
+    async def _run_async_update_history(self, now=None) -> None:
+        def _normalize_time_state(st):
+            if not isinstance(st, DatedState):
+                return None
+
+            if st.when.tzinfo is None:
+                st.when = dt_util.as_local(st.when)
+
+            if st.when.tzinfo is not timezone.utc:
+                st.when = dt_util.as_utc(st.when)
+
+            return st
+
+        #
+        # Normalize and filter historical states
+        #
+        states_at_dt = await self.async_update_history()
+        states_at_dt = [_normalize_time_state(x) for x in states_at_dt]
+        states_at_dt = [x for x in states_at_dt if x is not None]
+        states_at_dt = list(sorted(states_at_dt, key=lambda x: x.when))
+
+        _LOGGER.debug(f"Got {len(states_at_dt)} measures from sensor")
+
+        #
+        # Setup recorder write
+        #
+        if states_at_dt:
+            fn = functools.partial(self._recorder_write_states, states_at_dt)
+            self.recorder.async_add_executor_job(fn)
+
+            _LOGGER.debug("Executor job set to write them")
+        else:
+            _LOGGER.debug("Nothing to write")
 
     async def async_added_to_hass(self) -> None:
         """Once added to hass:
@@ -56,171 +124,120 @@ class HistoricalEntity:
         - Setup a peridioc call to update the entity
         """
 
-        async def _execute_update(*args, **kwargs):
-            _LOGGER.debug("Run update")
-            await self.async_update()
-            await self.flush_historical_log()
-
         if self.should_poll:
             raise Exception("poll model is not supported")
 
-        self.historical.state = Store(hass=self.hass, version=1, key=self.entity_id)
-        await self.load_state()
+        self.recorder = recorder.get_instance(self.hass)  # type: ignore[attr-defined]
 
-        if not self.should_poll:
-            await _execute_update()
-            async_track_time_interval(
-                self.hass, _execute_update, timedelta(seconds=60 * 60 * 6)
-            )
+        _LOGGER.debug(f"{self.entity_id}: added to hass")  # type: ignore[attr-defined]
 
-        await self.flush_historical_log()
-
-        _LOGGER.debug(f"HistoricalEntity ready, last entry: {self.historical.data!r}")
-
-    def historical_state(self):
-        """Just in case the entity needs to implement state property"""
-
-        return self.historical.data[STORE_LAST_STATE]
-
-    def extend_historical_log(
-        self, data: Iterable[tuple[datetime, Any, Optional[Mapping]]]
-    ) -> None:
-        """Add historical states to the queue.
-        The data is an iterable of tuples, each of one must be:
-        - 1st element in the tuple represents the time when the state was
-          generated
-        - 2nd element is the value of the state
-        - 3rd element are extra attributes that must be attached to the state
-        """
-
-        self.historical.log.extend(data)
-
-    async def flush_historical_log(self):
-        """Write internal log to the database."""
-
-        if not self.hass or not self.historical.state:
-            _LOGGER.warning("Entity not added to hass yet")
-            return
-
-        self.historical.log = list(sorted(self.historical.log, key=lambda x: x[0]))
-        if not self.historical.log:
-            return
-
-        # stats_start = self.historical.log[0][2]["last_reset"]
-        # stats_end = self.historical.log[-1][0]
-
-        while True:
-            try:
-                pack = self.historical.log.pop(0)
-            except IndexError:
-                break
-
-            if len(pack) == 2:
-                dt, value = pack
-                attributes = {}
-            else:
-                dt, value, attributes = pack
-
-            if dt <= self.historical.data[STORE_LAST_UPDATE]:
-                _LOGGER.debug(f"Skip update for {value} @ {dt}")
-                continue
-
-            if dt >= dt_util.now():
-                _LOGGER.debug(f"Skip FUTURE for {value} @ {dt}")
-                continue
-
-            _LOGGER.debug(f"Write historical state: {value} @ {dt} {attributes!r}")
-            self.write_state_at_time(
-                value,
-                dt=dt,
-                attributes=attributes,
-            )
-
-            await self.save_state({STORE_LAST_UPDATE: dt, STORE_LAST_STATE: value})
-
-        # self.hass.async_add_executor_job(self._stats, stats_start, stats_end)
-
-    # @callback
-    # def _stats(self, start, end):
-    #     _LOGGER.debug(f"Similate from {start} to {end}")
-    #     compile_statistics(self.hass, start, end)
-
-    # @callback
-    # def _statistics(self):
-
-    #     _LOGGER.debug("Stats start")
-    #     compile_statistics(
-    #         self.hass,
-    #         dt_util.as_local(datetime(year=2021, month=11, day=1)),
-    #         dt_util.now(),
-    #     )
-    #     _LOGGER.debug("Stats done")
-
-    async def save_state(self, params):
-        """Convenient function to store internal state"""
-
-        data = self.historical.data
-        data.update(params)
-
-        self.historical.data = data.copy()
-
-        data[STORE_LAST_UPDATE] = dt_util.as_utc(data[STORE_LAST_UPDATE]).timestamp()
-
-        await self.historical.state.async_save(data)
-        return data
-
-    async def load_state(self):
-        """Convenient function to load internal state"""
-
-        data = (await self.historical.state.async_load()) or {}
-        data = {
-            STORE_LAST_STATE: None,
-            STORE_LAST_UPDATE: 0,
-        } | data
-
-        data[STORE_LAST_UPDATE] = dt_util.as_utc(
-            datetime.fromtimestamp(data[STORE_LAST_UPDATE])
+        await self._run_async_update_history()
+        async_track_time_interval(
+            self.hass,  # type: ignore[attr-defined]
+            self._run_async_update_history,
+            self.HISTORICAL_UPDATE_INTERVAL,
+        )
+        _LOGGER.debug(
+            f"{self.entity_id}: "  # type: ignore[attr-defined]
+            f"updating each {self.HISTORICAL_UPDATE_INTERVAL.total_seconds()} seconds"
         )
 
-        self.historical.data = data
-        return data
+    def _recorder_write_states(self, states_at_dt):
+        _LOGGER.debug("Writing states on recorder")
 
-    @property
-    def historical(self):
-        """The general trend in homeassistant helpers is to use them as mixins,
-        without inheritance, so no super().__init__() is called.
+        with session_scope(session=self.recorder.get_session()) as session:
+            #
+            # Cleanup invalid states in database
+            #
+            invalid_states = (
+                session.query(models.States)
+                .filter(models.States.entity_id == self.entity_id)
+                .filter(
+                    or_(
+                        models.States.state == "unknown",
+                        models.States.state == "unavailable",
+                    )
+                )
+            )
+            for st in invalid_states:
+                # session.delete(st.event)
+                # session.delete(st.state_attributes)
+                session.delete(st)
 
-        Because of that internal stuff is implemented internal data stuff as a
-        property.
-        """
+            session.commit()
 
-        attr = getattr(self, "_historical", None)
-        if not attr:
-            attr = HistoricalData(log=[], data={}, state=None)
-            setattr(self, "_historical", attr)
+            #
+            # Check latest state in the database
+            #
+            latest_db_state = (
+                session.query(models.States)
+                .filter(models.States.entity_id == self.entity_id)
+                .filter(  # Just in case…
+                    not_(
+                        or_(
+                            models.States.state == "unknown",
+                            models.States.state == "unavailable",
+                        )
+                    )
+                )
+                .order_by(models.States.last_updated.desc())
+                .first()
+            )
+            # first_run = latest_db_state is None
 
-        return attr
+            #
+            # Drop historical states older than lastest db state
+            #
+            states_at_dt = list(sorted(states_at_dt, key=lambda x: x.when))
+            if latest_db_state:
+                # Fix TZINFO from database
+                cutoff = latest_db_state.last_updated.replace(tzinfo=timezone.utc)
+                _LOGGER.debug(
+                    "Found previous states in db, latest is dated at "
+                    f"{cutoff} ({latest_db_state.state})"
+                )
+                states_at_dt = [x for x in states_at_dt if x.when > cutoff]
 
-    def write_state_at_time(
-        self: Entity,
-        state: str,
-        dt: Optional[datetime],
-        attributes: Optional[Mapping] = None,
-    ):
-        """
-        Wrapper for the modified version of
-        homeassistant.core.StateMachine.async_set
-        """
-        state = _stringify_state(self, state)
-        attrs = dict(_build_attributes(self, state))
-        attrs.update(attributes or {})
+            if not states_at_dt:
+                _LOGGER.debug("No new states detected")
+                return
 
-        ret = async_set(
-            self.hass.states,
-            entity_id=self.entity_id,
-            new_state=state,
-            attributes=attrs,
-            time_fired=dt,
-        )
+            _LOGGER.debug(f"About to write {len(states_at_dt)} states to database")
+            _LOGGER.debug(
+                f"Extending from {states_at_dt[0].when} to {states_at_dt[-1].when}"
+            )
 
-        return ret
+            #
+            # Build recorder State, StateAttributes and Event
+            #
+            db_states = []
+            for idx, st_dt in enumerate(states_at_dt):
+                event = models.Events(
+                    event_type=core.EVENT_STATE_CHANGED,
+                    time_fired=st_dt.when,
+                )
+
+                attrs_as_dict = _build_attributes(self, st_dt.state)
+                attrs_as_dict.update(st_dt.attributes)
+                attrs_as_str = models.JSON_DUMP(attrs_as_dict)
+                attrs_hash = models.StateAttributes.hash_shared_attrs(attrs_as_str)
+                state_attributes = models.StateAttributes(
+                    hash=attrs_hash, shared_attrs=attrs_as_str
+                )
+
+                state = models.States(
+                    entity_id=self.entity_id,
+                    event=event,
+                    last_changed=st_dt.when,
+                    last_updated=st_dt.when,
+                    old_state=db_states[idx - 1] if idx else latest_db_state,
+                    state=_stringify_state(self, st_dt.state),
+                    state_attributes=state_attributes,
+                )
+                _LOGGER.debug(f" => {state.state} @ {state.last_changed}")
+                db_states.append(state)
+
+            session.add_all(db_states)
+            session.commit()
+
+            _LOGGER.debug(f"Added {len(db_states)} to database")
