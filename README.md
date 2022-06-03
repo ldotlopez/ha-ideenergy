@@ -29,7 +29,6 @@ This integration requires an **advanced** user profile on i-DE website.
 * The reading only returns integer values. If from the last reading your meter indicates a variance minor then 1 kWh, the integration will not reflect any variance and that will only be recorded once the variance from the previous reading is greater then 1.
 * Solar Production (if applies on your case) is under development. 
 
-## Getting Started
 
 ### Dependencies
 
@@ -37,9 +36,9 @@ You must have an i-DE username and access to the Clients' website. You may regis
 
 It also necessary to have an "Advanced User" profile. Should you not have one already, you need to fill the request for from your [Profile Area](https://www.i-de.es/consumidores/web/home/personal-area/userData).
 
-### Installation
+## Installation
 
-#### - [HACS](https://hacs.xyz/) method (recommended)
+### Using [HACS](https://hacs.xyz/) (recommended)
 
 - Copy this repo URL
 - In the HACS section, add this repo as a custom one:
@@ -50,19 +49,21 @@ It also necessary to have an "Advanced User" profile. Should you not have one al
   - On the "Category" select "Integration"
   - Click the "Download" button and download latest version. 
 - Restart HA
-- Click this button: [![Open your Home Assistant instance and start setting up a new integration.](https://my.home-assistant.io/badges/config_flow_start.svg)](https://my.home-assistant.io/redirect/config_flow_start/?domain=ideenergy) or
-- Go to "Settings" >> "Devices & Services" and click "+ ADD INTEGRATION" and select "i-de.es energy sensors" or 
+- Click this button >>
+[![Open your Home Assistant instance and start setting up a new integration.](https://my.home-assistant.io/badges/config_flow_start.svg)](https://my.home-assistant.io/redirect/config_flow_start/?domain=ideenergy)
+- or Go to "Settings" >> "Devices & Services" and click "+ ADD INTEGRATION" and select "i-de.es energy sensors"  
 ![image](https://user-images.githubusercontent.com/59612788/171966005-e58f6b88-a952-4033-82c6-b1d4ea665873.png)
 - Follow the configuration steps: provide your credentials for access to i-DE and select the contract that you want to monitor. (Should you need to add more contracts, just follow the previous step as many times as needed).
 
 
-#### - Manually
+### Manually
 
 - Download/clone this repo
 - Copy the [custom_components/ide](custom_components/ideenergy) folder into your custom_components folder into your HA installation
 - Restart HA
-- Click this button: [![Open your Home Assistant instance and start setting up a new integration.](https://my.home-assistant.io/badges/config_flow_start.svg)](https://my.home-assistant.io/redirect/config_flow_start/?domain=ideenergy) or
-- Go to "Settings" >> "Devices & Services" and click "+ ADD INTEGRATION" and select "i-de.es energy sensors" or 
+- Click this button >>
+[![Open your Home Assistant instance and start setting up a new integration.](https://my.home-assistant.io/badges/config_flow_start.svg)](https://my.home-assistant.io/redirect/config_flow_start/?domain=ideenergy)
+- or Go to "Settings" >> "Devices & Services" and click "+ ADD INTEGRATION" and select "i-de.es energy sensors" 
 ![image](https://user-images.githubusercontent.com/59612788/171966005-e58f6b88-a952-4033-82c6-b1d4ea665873.png)
 - Follow the configuration steps: provide your credentials for access to i-DE and select the contract that you want to monitor. (Should you need to add more contracts, just follow the previous step as many times as needed).
 
@@ -85,6 +86,10 @@ It also necessary to have an "Advanced User" profile. Should you not have one al
 This extension provides an 'historical' sensor to incorporate data from the past into Home Assistant database. For your own safety the sensor is not enabled by default and must be enabled manually.
 
 ☠️ Historic sensor is based on a **high experimental hack** and can broke and/or corrupt your database and/or statistics. **Use at your own risk**.
+
+## License
+
+This project is licensed under the GNU General Public License v3.0 License - see the LICENSE file for details
 
 ## Disclaimer
 
