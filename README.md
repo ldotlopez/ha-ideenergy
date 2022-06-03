@@ -91,6 +91,7 @@ This extension provides an 'historical' sensor to incorporate data from the past
 
 This project is licensed under the GNU General Public License v3.0 License - see the LICENSE file for details
 
+
 ## Disclaimer
 
 THIS PROJECT IS NOT IN ANY WAY ASSOCIATED WITH OR RELATED TO THE IBERDROLA GROUP COMPANIES OR ANY OTHER. The information here and online is for educational and resource purposes only and therefore the developers do not endorse or condone any inappropriate use of it, and take no legal responsibility for the functionality or security of your devices.
