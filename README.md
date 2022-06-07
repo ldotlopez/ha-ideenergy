@@ -6,9 +6,9 @@
 [![HACS validation](https://github.com/ldotlopez/ha-ideenergy/workflows/Validate%20with%20HACS/badge.svg)](https://github.com/ldotlopez/ha-ideenergy/actions/workflows/hacs.yml)
 [![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/ambv/black)
 
-[ideenergy](https://github.com/ldotlopez/ideenergy) integration for [home-assistant](home-assistant.io/)
+[ideenergy](https://github.com/ldotlopez/ideenergy) integration for [home-assistant](https://home-assistant.io/)
 
-i-DE (Iberdrola Distribución) Custom Integration for Home Assistant, providing sensors for Spanish Energy Distributor [i-DE](i-de.es).
+i-DE (Iberdrola Distribución) Custom Integration for Home Assistant, providing sensors for Spanish Energy Distributor [i-DE](https://i-de.es).
 
 This integration requires an **advanced** user profile on i-DE website.
 
