@@ -247,7 +247,7 @@ class Consumption(HistoricalEntity, SensorEntity):
 
     @property
     def entity_registry_enabled_default(self):
-        return True
+        return False
 
     async def async_update_history(self):
         end = datetime.today()
