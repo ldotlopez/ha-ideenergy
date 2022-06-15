@@ -5,7 +5,7 @@
   "documentation": "https://github.com/ldotlopez/ha-ideenergy",
   "issue_tracker": "https://github.com/ldotlopez/ha-ideenergy/issues",
   "requirements": [
-    "ideenergy==1.0.0a2"
+    "ideenergy==1.0.0a3"
   ],
   "dependencies": ["recorder"],
   "codeowners": [
