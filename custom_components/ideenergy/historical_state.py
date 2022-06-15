@@ -24,7 +24,6 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict
 
-from homeassistant import core
 from homeassistant.components import recorder
 from homeassistant.components.recorder import models
 from homeassistant.components.recorder.util import session_scope
@@ -210,12 +209,18 @@ class HistoricalEntity:
             #
             # Build recorder State, StateAttributes and Event
             #
+
+            # See https://github.com/home-assistant/core/blob/master/homeassistant/components/recorder/models.py  # noqa: E501
+            #
+            # 2022.06.06: event seems to be deprecated
+            #             https://github.com/home-assistant/core/blob/2022.6.6/homeassistant/components/recorder/models.py#L280
+
             db_states = []
             for idx, st_dt in enumerate(states_at_dt):
-                event = models.Events(
-                    event_type=core.EVENT_STATE_CHANGED,
-                    time_fired=st_dt.when,
-                )
+                # event = models.Events(
+                #     event_type=core.EVENT_STATE_CHANGED,
+                #     time_fired=st_dt.when,
+                # )
 
                 attrs_as_dict = _build_attributes(self, st_dt.state)
                 attrs_as_dict.update(st_dt.attributes)
@@ -227,7 +232,7 @@ class HistoricalEntity:
 
                 state = models.States(
                     entity_id=self.entity_id,
-                    event=event,
+                    # event=event,
                     last_changed=st_dt.when,
                     last_updated=st_dt.when,
                     old_state=db_states[idx - 1] if idx else latest_db_state,
