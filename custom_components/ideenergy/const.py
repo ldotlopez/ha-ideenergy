@@ -19,7 +19,7 @@
 
 
 DOMAIN = "ideenergy"
-DEFAULT_NAME = "ICP"
+DEFAULT_NAME = "I-DE"
 
 CONF_CONTRACT = "contract"
 DELAY_MAX_SECONDS = 5
