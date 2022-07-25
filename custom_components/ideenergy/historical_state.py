@@ -25,7 +25,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Any, Dict
 
 from homeassistant.components import recorder
-from homeassistant.components.recorder import models
+from homeassistant.components.recorder import db_schema
 from homeassistant.components.recorder.util import session_scope
 from homeassistant.helpers.event import async_track_time_interval
 from homeassistant.util import dt as dt_util
@@ -149,12 +149,12 @@ class HistoricalEntity:
             # Cleanup invalid states in database
             #
             invalid_states = (
-                session.query(models.States)
-                .filter(models.States.entity_id == self.entity_id)
+                session.query(db_schema.States)
+                .filter(db_schema.States.entity_id == self.entity_id)
                 .filter(
                     or_(
-                        models.States.state == "unknown",
-                        models.States.state == "unavailable",
+                        db_schema.States.state == "unknown",
+                        db_schema.States.state == "unavailable",
                     )
                 )
             )
@@ -169,17 +169,17 @@ class HistoricalEntity:
             # Check latest state in the database
             #
             latest_db_state = (
-                session.query(models.States)
-                .filter(models.States.entity_id == self.entity_id)
+                session.query(db_schema.States)
+                .filter(db_schema.States.entity_id == self.entity_id)
                 .filter(  # Just in case…
                     not_(
                         or_(
-                            models.States.state == "unknown",
-                            models.States.state == "unavailable",
+                            db_schema.States.state == "unknown",
+                            db_schema.States.state == "unavailable",
                         )
                     )
                 )
-                .order_by(models.States.last_updated.desc())
+                .order_by(db_schema.States.last_updated.desc())
                 .first()
             )
             # first_run = latest_db_state is None
@@ -210,29 +210,26 @@ class HistoricalEntity:
             # Build recorder State, StateAttributes and Event
             #
 
-            # See https://github.com/home-assistant/core/blob/master/homeassistant/components/recorder/models.py  # noqa: E501
-            #
-            # 2022.06.06: event seems to be deprecated
-            #             https://github.com/home-assistant/core/blob/2022.6.6/homeassistant/components/recorder/models.py#L280
-
             db_states = []
             for idx, st_dt in enumerate(states_at_dt):
-                # event = models.Events(
-                #     event_type=core.EVENT_STATE_CHANGED,
-                #     time_fired=st_dt.when,
-                # )
-
                 attrs_as_dict = _build_attributes(self, st_dt.state)
                 attrs_as_dict.update(st_dt.attributes)
-                attrs_as_str = models.JSON_DUMP(attrs_as_dict)
-                attrs_hash = models.StateAttributes.hash_shared_attrs(attrs_as_str)
-                state_attributes = models.StateAttributes(
+                attrs_as_str = db_schema.JSON_DUMP(attrs_as_dict)
+
+                attrs_as_bytes = (
+                    b"{}" if st_dt.state is None else attrs_as_str.encode("utf-8")
+                )
+
+                attrs_hash = db_schema.StateAttributes.hash_shared_attrs_bytes(
+                    attrs_as_bytes
+                )
+
+                state_attributes = db_schema.StateAttributes(
                     hash=attrs_hash, shared_attrs=attrs_as_str
                 )
 
-                state = models.States(
+                state = db_schema.States(
                     entity_id=self.entity_id,
-                    # event=event,
                     last_changed=st_dt.when,
                     last_updated=st_dt.when,
                     old_state=db_states[idx - 1] if idx else latest_db_state,
