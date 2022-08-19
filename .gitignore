@@ -111,3 +111,7 @@ Temporary Items
 config/
 !config/configuration.yaml
 !config/custom_components
+Pipfile.lock
+*.swp
+*.sublime-*
+*.env
