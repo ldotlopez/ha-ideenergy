@@ -17,13 +17,17 @@
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301,
 # USA.
 
-import asyncio
+import datetime
 import enum
+import functools
 import logging
-import random
+from abc import abstractmethod
 from datetime import timedelta
+from typing import Any, Tuple
 
 from homeassistant.util import dt as dt_util
+
+_LOGGER = logging.getLogger(__name__)
 
 
 ATTR_DELAY_INTERVAL = "delay_interval"
@@ -35,36 +39,149 @@ ATTR_FORCED = "forced"
 ATTR_LAST_SUCCESS = "last_success"
 ATTR_STATE = "state"
 ATTR_RETRY = "retry"
+ATTR_ALLOWED_WINDOW_MINUTES = "allowed_window_minutes"
+
+DEFAULT_MAX_RETRIES = 3
 
 
-class State(enum.Enum):
-    COOLDOWN_BARRIER_ACTIVE = enum.auto()
-    FORCED = enum.auto()
-    READY = enum.auto()
-    RETRYING = enum.auto()
-    TOO_RECENT = enum.auto()
-    UPDATE_WINDOW_CLOSED = enum.auto()
+def check_tzinfo(
+    param: str | int, default_tzinfo=datetime.timezone.utc, optional=False
+):
+    def decorator(fn):
+        @functools.wraps(fn)
+        def wrapper(*args, **kwargs):
+            if isinstance(param, int):
+                dt = args[param]
+            elif isinstance(param, str):
+                dt = kwargs.get(param)
+            else:
+                raise TypeError("Invalid argument for decorator")
+
+            if dt is None:
+                if optional:
+                    return fn(*args, **kwargs)
+                else:
+                    raise TypeError(f"{param} is missing")
+
+            if not isinstance(dt, datetime.datetime):
+                raise TypeError(f"{param} must be a datetime object")
+
+            if dt.tzinfo is None and default_tzinfo is None:
+                raise ValueError(f"{param} lacks tzinfo")
+
+            if default_tzinfo is not None:
+                dt = dt.replace(tzinfo=default_tzinfo)
+
+                if isinstance(param, int):
+                    args[param] = dt
+                if isinstance(param, str):
+                    kwargs[param] = dt
+
+            return fn(*args, **kwargs)
+
+        return wrapper
+
+    return decorator
 
 
 class Barrier:
+    @abstractmethod
+    def check(self, **kwargs: Any | None):
+        raise NotImplementedError()
+
+    @abstractmethod
+    def success(self, **kwargs: Any | None):
+        raise NotImplementedError()
+
+    @abstractmethod
+    def fail(self, **kwargs: Any | None):
+        raise NotImplementedError()
+
+    @abstractmethod
+    def dump(self):
+        return {}
+
+
+class BarrierException(Exception):
+    pass
+
+
+class BarrierDeniedError(BarrierException):
+    def __init__(self, code: Any, reason: str):
+        self.reason = reason
+        self.code = code
+
+
+class TimeDeltaBarrier(Barrier):
+    @check_tzinfo("last_success", optional=True)
+    def __init__(
+        self, delta: datetime.timedelta, last_success: datetime.datetime | None = None
+    ):
+        self._delta = delta
+        self._last_success = last_success or dt_util.utc_from_timestamp(0)
+
+    @check_tzinfo("now", optional=True)
+    def check(self, now=None):
+        now = now or self.utcnow()
+
+        diff = now - self._last_success
+        if diff < self._delta:
+            raise BarrierDeniedError(
+                code=TimeDeltaBarrierDenyError.NO_MAX_AGE,
+                reason=f"no max_age reached ({diff} <= {self._delta})",
+            )
+
+    @check_tzinfo("now", optional=True)
+    def success(self, now=None):
+        now = now or self.utcnow()
+        self._last_success = now
+
+    @check_tzinfo("now", optional=True)
+    def fail(self, now=None):
+        pass
+
+    def utcnow(self):
+        return dt_util.utcnow()
+
+    @property
+    def delta(self):
+        return self._delta
+
+    @property
+    def last_success(self):
+        return self._last_success
+
+    def dump(self):
+        return {ATTR_MAX_AGE: self.delta, ATTR_LAST_SUCCESS: self.last_success}
+
+
+class TimeDeltaBarrierDenyError(enum.Enum):
+    NO_MAX_AGE = enum.auto()
+
+
+class RetryableBarrier:
+    def __init__(self, max_retries=DEFAULT_MAX_RETRIES):
+        self._max_retries = max_retries
+
+    @property
+    def attributes(self):
+        return {ATTR_MAX_RETRIES: self._max_retries}
+
+    @property
+    def max_retries(self):
+        return self._max_retries
+
+
+class TimeWindowBarrier(Barrier):
     def __init__(
         self,
-        update_window_start_minute,
-        update_window_end_minute,
-        max_retries,
-        max_age,
-        delay_min_seconds,
-        delay_max_seconds,
-        logger=None,
+        allowed_window_minutes: Tuple[int, int],
+        max_retries: int,
+        max_age: timedelta,
     ):
-        self._logger = logger or logging.getLogger(__name__)
-
         self._max_age = max_age
-        self._update_window_start_minute = update_window_start_minute
-        self._update_window_end_minute = update_window_end_minute
+        self._allowed_window_minutes = allowed_window_minutes
         self._max_retries = max_retries
-        self._delay_min_seconds = delay_min_seconds
-        self._delay_max_seconds = delay_max_seconds
 
         zero_dt = dt_util.utc_from_timestamp(0)
 
@@ -74,112 +191,133 @@ class Barrier:
         self._last_success = zero_dt
         self._cooldown = zero_dt
 
-    @property
-    def state(self):
-        return self.get_state()
+    def utcnow(self):
+        return dt_util.utcnow()
 
     @property
-    def attributes(self):
+    def dump(self):
         ret = {
             # Configuration
-            ATTR_DELAY_INTERVAL: (self._delay_min_seconds, self._delay_max_seconds),
             ATTR_MAX_AGE: self._max_age,
             ATTR_MAX_RETRIES: self._max_retries,
-            ATTR_UPDATE_WINDOW_INTERVAL: (
-                self._update_window_start_minute,
-                self._update_window_end_minute,
-            ),
+            ATTR_ALLOWED_WINDOW_MINUTES: self._allowed_window_minutes,
             # Internal state
             ATTR_COOLDOWN: self._cooldown,
             ATTR_FORCED: self._force_next,
             ATTR_LAST_SUCCESS: self._last_success,
-            ATTR_STATE: self.state.name,
             ATTR_RETRY: self._failures,
         }
 
         return ret
 
-    def get_state(self, now=None):
-        now = dt_util.as_utc(now or dt_util.utcnow())
+    @check_tzinfo("now", optional=True)
+    def check(self, now=None):
+        """
+        Checks (in order), important for testing
+        - forced
+        - cooldown
+        - retrying
+        - update window
+        - no delta
+        """
+        now = now or self.utcnow()
 
         update_window_is_open = (
-            self._update_window_start_minute
+            self._allowed_window_minutes[0]
             <= dt_util.as_local(now).minute
-            <= self._update_window_end_minute
+            <= self._allowed_window_minutes[1]
         )
         last_success_age = (now - self._last_success).total_seconds()
         min_age = (
-            self._update_window_end_minute - self._update_window_start_minute
+            self._allowed_window_minutes[1] - self._allowed_window_minutes[0]
         ) * 60
 
         # Check if cooldown has been reached
         if self._failures >= self._max_retries and now >= self._cooldown:
-            self._logger.debug("cooldown barrier reached, resetting failures")
+            _LOGGER.debug("cooldown barrier reached, resetting failures")
             self._failures = 0
 
         if self._force_next:
-            self._logger.debug("Execution allowed: forced")
-            return State.FORCED
+            _LOGGER.debug("Execution allowed: forced")
+            return
 
         if now < self._cooldown:
-            self._logger.debug(
+            _LOGGER.debug(
                 "Execution denied: cooldown barrier is active "
                 f"({dt_util.as_local(self._cooldown)})"
             )
-            return State.COOLDOWN_BARRIER_ACTIVE
+            raise BarrierDeniedError(
+                code=TimeWindowBarrierDenyError.COOLDOWN,
+                reason="barrier is in cooldown stage",
+            )
 
         if self._failures > 0 and self._failures < self._max_retries:
-            self._logger.debug("Execution allowed: retrying")
-            return State.RETRYING
+            _LOGGER.debug("Execution allowed: retrying")
+            return
 
         if not update_window_is_open:
-            self._logger.debug("Execution denied: update window is closed")
-            return State.UPDATE_WINDOW_CLOSED
+            _LOGGER.debug("Execution denied: update window is closed")
+            raise BarrierDeniedError(
+                code=TimeWindowBarrierDenyError.UPDATE_WINDOW_CLOSED,
+                reason="update window is closed",
+            )
 
         if last_success_age <= min_age:
-            self._logger.debug(
+            _LOGGER.debug(
                 "Execution denied: last success is too recent "
                 f"({last_success_age} seconds, min: {min_age} seconds)"
             )
-            return State.TOO_RECENT
+            raise BarrierDeniedError(
+                code=TimeWindowBarrierDenyError.NO_DELTA, reason="no delta"
+            )
 
-        self._logger.debug("Execution allowed: no blockers")
-        return State.READY
+        _LOGGER.debug("Execution allowed: no blockers")
 
     def force_next(self):
         self._force_next = True
 
-    def sucess(self, now=None):
-        now = dt_util.as_utc(now or dt_util.utcnow())
+    @check_tzinfo("now", optional=True)
+    def success(self, now=None):
+        now = now or self.utcnow()
 
         self._force_next = False
         self._failures = 0
         self._last_success = now
 
-        self._logger.debug("Success registered")
+        _LOGGER.debug("Success registered")
 
+    @check_tzinfo("now", optional=True)
     def fail(self, now=None):
-        now = dt_util.as_utc(now or dt_util.utcnow())
+        now = now or self.utcnow()
 
         self._failures = self._failures + 1
-        self._logger.debug(f"Fail registered ({self._failures}/{self._max_retries})")
+        _LOGGER.debug(f"Fail registered ({self._failures}/{self._max_retries})")
 
         if self._failures >= self._max_retries:
             self._force_next = False
-            self._cooldown = now + timedelta(seconds=self._max_age / 2)
+            self._cooldown = now + (self._max_age / 2)
 
-            self._logger.debug(
+            _LOGGER.debug(
                 "Max failures reached, setup cooldown barrier until "
                 f"{dt_util.as_local(self._cooldown)}"
             )
 
-    def allowed(self, now=None):
-        return self.get_state(now) in (State.FORCED, State.RETRYING, State.READY)
 
-    async def delay(self):
-        delay = (
-            random.randint(self._delay_min_seconds * 10, self._delay_max_seconds * 10)
-            / 10
-        )
-        self._logger.debug(f"Random delay: {delay} seconds")
-        await asyncio.sleep(delay)
+class TimeWindowBarrierDenyError(enum.Enum):
+    UPDATE_WINDOW_CLOSED = enum.auto()
+    COOLDOWN = enum.auto()
+    NO_DELTA = enum.auto()
+
+
+class NoopBarrier(Barrier):
+    def check(self):
+        pass
+
+    def success(self):
+        pass
+
+    def fail(self):
+        pass
+
+    def dump(self):
+        return {}

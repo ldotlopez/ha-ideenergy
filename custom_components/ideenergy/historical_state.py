@@ -29,7 +29,7 @@ from homeassistant.components.recorder import db_schema
 from homeassistant.components.recorder.util import session_scope
 from homeassistant.helpers.event import async_track_time_interval
 from homeassistant.util import dt as dt_util
-from sqlalchemy import or_, not_
+from sqlalchemy import not_, or_
 
 from .hack import _build_attributes, _stringify_state
 
@@ -49,7 +49,7 @@ class DatedState:
 #   or 'unavailable'
 
 
-class HistoricalEntity:
+class HistoricalEntityStandAlone:
     HISTORICAL_UPDATE_INTERVAL = timedelta(hours=12)
 
     async def async_update_history(self):
@@ -99,18 +99,18 @@ class HistoricalEntity:
         #
         # Normalize and filter historical states
         #
-        states_at_dt = await self.async_update_history()
-        states_at_dt = [_normalize_time_state(x) for x in states_at_dt]
-        states_at_dt = [x for x in states_at_dt if x is not None]
-        states_at_dt = list(sorted(states_at_dt, key=lambda x: x.when))
+        dated_states = await self.async_update_history()
+        dated_states = [_normalize_time_state(x) for x in dated_states]
+        dated_states = [x for x in dated_states if x is not None]
+        dated_states = list(sorted(dated_states, key=lambda x: x.when))
 
-        _LOGGER.debug(f"Got {len(states_at_dt)} measures from sensor")
+        _LOGGER.debug(f"Got {len(dated_states)} measures from sensor")
 
         #
         # Setup recorder write
         #
-        if states_at_dt:
-            fn = functools.partial(self._recorder_write_states, states_at_dt)
+        if dated_states:
+            fn = functools.partial(self._recorder_write_states, dated_states)
             self.recorder.async_add_executor_job(fn)
 
             _LOGGER.debug("Executor job set to write them")
@@ -141,7 +141,7 @@ class HistoricalEntity:
             f"updating each {self.HISTORICAL_UPDATE_INTERVAL.total_seconds()} seconds"
         )
 
-    def _recorder_write_states(self, states_at_dt):
+    def _recorder_write_states(self, dated_states):
         _LOGGER.debug("Writing states on recorder")
 
         with session_scope(session=self.recorder.get_session()) as session:
@@ -187,7 +187,7 @@ class HistoricalEntity:
             #
             # Drop historical states older than lastest db state
             #
-            states_at_dt = list(sorted(states_at_dt, key=lambda x: x.when))
+            dated_states = list(sorted(dated_states, key=lambda x: x.when))
             if latest_db_state:
                 # Fix TZINFO from database
                 cutoff = latest_db_state.last_updated.replace(tzinfo=timezone.utc)
@@ -195,15 +195,15 @@ class HistoricalEntity:
                     "Found previous states in db, latest is dated at "
                     f"{cutoff} ({latest_db_state.state})"
                 )
-                states_at_dt = [x for x in states_at_dt if x.when > cutoff]
+                dated_states = [x for x in dated_states if x.when > cutoff]
 
-            if not states_at_dt:
+            if not dated_states:
                 _LOGGER.debug("No new states detected")
                 return
 
-            _LOGGER.debug(f"About to write {len(states_at_dt)} states to database")
             _LOGGER.debug(
-                f"Extending from {states_at_dt[0].when} to {states_at_dt[-1].when}"
+                f"Ready to save {len(dated_states)} states extending from "
+                f"{dated_states[0].when} to {dated_states[-1].when}"
             )
 
             #
@@ -211,13 +211,13 @@ class HistoricalEntity:
             #
 
             db_states = []
-            for idx, st_dt in enumerate(states_at_dt):
-                attrs_as_dict = _build_attributes(self, st_dt.state)
-                attrs_as_dict.update(st_dt.attributes)
+            for idx, dt_st in enumerate(dated_states):
+                attrs_as_dict = _build_attributes(self, dt_st.state)
+                attrs_as_dict.update(dt_st.attributes)
                 attrs_as_str = db_schema.JSON_DUMP(attrs_as_dict)
 
                 attrs_as_bytes = (
-                    b"{}" if st_dt.state is None else attrs_as_str.encode("utf-8")
+                    b"{}" if dt_st.state is None else attrs_as_str.encode("utf-8")
                 )
 
                 attrs_hash = db_schema.StateAttributes.hash_shared_attrs_bytes(
@@ -230,10 +230,194 @@ class HistoricalEntity:
 
                 state = db_schema.States(
                     entity_id=self.entity_id,
-                    last_changed=st_dt.when,
-                    last_updated=st_dt.when,
+                    last_changed=dt_st.when,
+                    last_updated=dt_st.when,
                     old_state=db_states[idx - 1] if idx else latest_db_state,
-                    state=_stringify_state(self, st_dt.state),
+                    state=_stringify_state(self, dt_st.state),
+                    state_attributes=state_attributes,
+                )
+                _LOGGER.debug(f" => {state.state} @ {state.last_changed}")
+                db_states.append(state)
+
+            session.add_all(db_states)
+            session.commit()
+
+            _LOGGER.debug(f"Added {len(db_states)} to database")
+
+
+class HistoricalEntity:
+    """The HistoricalEntity class provides:"""
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._historical_states = []
+
+    async def async_update_historical_states(self):
+        """async_update_historical_states()
+
+        Implement this async method to fetch historical data from provider and store
+        into self._historical_states
+        """
+        _LOGGER.debug("You must override this method")
+
+    @property
+    def should_poll(self):
+        # HistoricalEntities MUST NOT poll.
+        # Polling creates incorrect states at intermediate time points.
+
+        return False
+
+    @property
+    def state(self):
+        # Better report unavailable than anything
+        #
+        # Another aproach is to return data from historical entity, but causes
+        # wrong results. Keep here for reference.
+        #
+        # HistoricalEntities doesnt' pull but state is accessed only once when
+        # the sensor is registered for the first time in the database
+        #
+        # if state := self.historical_state():
+        #     return float(state)
+
+        return None
+
+    @property
+    def historical_states(self):
+        return self._historical_states
+
+    # @property
+    # def available(self):
+    #     # Leave us alone!
+    #     return False
+
+    def async_write_ha_historical_states(self):
+        def _normalize_time_state(st):
+            if not isinstance(st, DatedState):
+                return None
+
+            if st.when.tzinfo is None:
+                st.when = dt_util.as_local(st.when)
+
+            if st.when.tzinfo is not timezone.utc:
+                st.when = dt_util.as_utc(st.when)
+
+            return st
+
+        dated_states = self.historical_states
+        dated_states = [_normalize_time_state(x) for x in dated_states]
+        dated_states = [x for x in dated_states if x is not None]
+        dated_states = list(sorted(dated_states, key=lambda x: x.when))
+
+        _LOGGER.debug(f"Got {len(dated_states)} measures from sensor")
+
+        if not dated_states:
+            _LOGGER.debug("Nothing to write")
+            return
+
+        fn = functools.partial(self._save_states_into_recorder, dated_states)
+        self._get_recorder_instance().async_add_executor_job(fn)
+
+        _LOGGER.debug("Added job executor to save states")
+
+    def _get_recorder_instance(self):
+        return recorder.get_instance(self.hass)
+
+    def _save_states_into_recorder(self, dated_states):
+        _LOGGER.debug("Writing states on recorder")
+
+        with session_scope(
+            session=self._get_recorder_instance().get_session()
+        ) as session:
+            #
+            # Cleanup invalid states in database
+            #
+            invalid_states = (
+                session.query(db_schema.States)
+                .filter(db_schema.States.entity_id == self.entity_id)
+                .filter(
+                    or_(
+                        db_schema.States.state == "unknown",
+                        db_schema.States.state == "unavailable",
+                    )
+                )
+            )
+            for st in invalid_states:
+                # session.delete(st.event)
+                # session.delete(st.state_attributes)
+                session.delete(st)
+
+            session.commit()
+
+            #
+            # Check latest state in the database
+            #
+            latest_db_state = (
+                session.query(db_schema.States)
+                .filter(db_schema.States.entity_id == self.entity_id)
+                .filter(  # Just in case…
+                    not_(
+                        or_(
+                            db_schema.States.state == "unknown",
+                            db_schema.States.state == "unavailable",
+                        )
+                    )
+                )
+                .order_by(db_schema.States.last_updated.desc())
+                .first()
+            )
+            # first_run = latest_db_state is None
+
+            #
+            # Drop historical states older than lastest db state
+            #
+            dated_states = list(sorted(dated_states, key=lambda x: x.when))
+            if latest_db_state:
+                # Fix TZINFO from database
+                cutoff = latest_db_state.last_updated.replace(tzinfo=timezone.utc)
+                _LOGGER.debug(
+                    "Found previous states in db, latest is dated at "
+                    f"{cutoff} ({latest_db_state.state})"
+                )
+                dated_states = [x for x in dated_states if x.when > cutoff]
+
+            if not dated_states:
+                _LOGGER.debug("No new states detected")
+                return
+
+            _LOGGER.debug(f"About to write {len(dated_states)} states to database")
+            _LOGGER.debug(
+                f"Extending from {dated_states[0].when} to {dated_states[-1].when}"
+            )
+
+            #
+            # Build recorder State, StateAttributes and Event
+            #
+
+            db_states = []
+            for idx, dt_st in enumerate(dated_states):
+                attrs_as_dict = _build_attributes(self, dt_st.state)
+                attrs_as_dict.update(dt_st.attributes)
+                attrs_as_str = db_schema.JSON_DUMP(attrs_as_dict)
+
+                attrs_as_bytes = (
+                    b"{}" if dt_st.state is None else attrs_as_str.encode("utf-8")
+                )
+
+                attrs_hash = db_schema.StateAttributes.hash_shared_attrs_bytes(
+                    attrs_as_bytes
+                )
+
+                state_attributes = db_schema.StateAttributes(
+                    hash=attrs_hash, shared_attrs=attrs_as_str
+                )
+
+                state = db_schema.States(
+                    entity_id=self.entity_id,
+                    last_changed=dt_st.when,
+                    last_updated=dt_st.when,
+                    old_state=db_states[idx - 1] if idx else latest_db_state,
+                    state=_stringify_state(self, dt_st.state),
                     state_attributes=state_attributes,
                 )
                 _LOGGER.debug(f" => {state.state} @ {state.last_changed}")

@@ -5,12 +5,12 @@
   "documentation": "https://github.com/ldotlopez/ha-ideenergy",
   "issue_tracker": "https://github.com/ldotlopez/ha-ideenergy/issues",
   "requirements": [
-    "ideenergy==1.0.0a3"
+    "ideenergy==1.0.0b1"
   ],
   "dependencies": ["recorder"],
   "codeowners": [
     "@ldotlopez"
   ],
   "iot_class": "cloud_polling",
-  "version": "0.2.3"
+  "version": "1.0.0"
 }
