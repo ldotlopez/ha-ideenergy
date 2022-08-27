@@ -24,7 +24,7 @@
 import logging
 import math
 from datetime import timedelta
-from typing import Optional
+from typing import Dict, List, Optional
 
 from homeassistant.components.sensor import (
     ATTR_STATE_CLASS,
@@ -59,6 +59,7 @@ from .datacoordinator import (
     DATA_ATTR_HISTORICAL_GENERATION,
     DATA_ATTR_MEASURE_ACCUMULATED,
     DATA_ATTR_MEASURE_INSTANT,
+    DATA_ATTR_HISTORICAL_POWER_DEMAND,
     DataSetType,
     IdeCoordinator,
 )
@@ -268,20 +269,11 @@ class HistoricalConsumption(HistoricalSensor, IdeSensor, CoordinatorEntity):
 
     @property
     def historical_states(self):
-        if not self.coordinator.data:
-            return None
+        ret = _historical_data_to_date_states(
+            self.coordinator.data[DATA_ATTR_HISTORICAL_CONSUMPTION]["historical"]
+        )
 
-        data = self.coordinator.data[DATA_ATTR_HISTORICAL_CONSUMPTION]["historical"]
-        data = [
-            DatedState(
-                state=value / 1000,
-                when=dt_util.as_utc(dt) + timedelta(hours=1),
-                attributes={"last_reset": dt_util.as_utc(dt)},
-            )
-            for (dt, value) in data
-        ]
-
-        return data
+        return ret
 
     async def async_update_historical_states(self):
         pass
@@ -338,20 +330,11 @@ class HistoricalGeneration(HistoricalSensor, IdeSensor, CoordinatorEntity):
 
     @property
     def historical_states(self):
-        if not self.coordinator.data:
-            return None
+        ret = _historical_data_to_date_states(
+            self.coordinator.data[DATA_ATTR_HISTORICAL_GENERATION]["historical"]
+        )
 
-        data = self.coordinator.data[DATA_ATTR_HISTORICAL_GENERATION]
-        data = [
-            DatedState(
-                state=value / 1000,
-                when=dt_util.as_utc(dt) + timedelta(hours=1),
-                attributes={"last_reset": dt_util.as_utc(dt)},
-            )
-            for (dt, value) in data["historical"]
-        ]
-
-        return data
+        return ret
 
     async def async_update_historical_states(self):
         pass
@@ -361,74 +344,64 @@ class HistoricalGeneration(HistoricalSensor, IdeSensor, CoordinatorEntity):
         self.async_write_ha_historical_states()
 
 
-# class HistoricalPowerDemand(HistoricalSensor, IdeSensor, CoordinatorEntity):
-#     """
-#     The IdeSensor class provides:
-#         __init__
-#         __repr__
-#         name
-#         unique_id
-#         device_info
-#         entity_registry_enabled_default
+class HistoricalPowerDemand(HistoricalSensor, IdeSensor, CoordinatorEntity):
+    """
+    The IdeSensor class provides:
+        __init__
+        __repr__
+        name
+        unique_id
+        device_info
+        entity_registry_enabled_default
 
-#     The CoordinatorEntity class provides:
-#         should_poll
-#         async_update
-#         async_added_to_hass
-#         available
-#     """
+    The CoordinatorEntity class provides:
+        should_poll
+        async_update
+        async_added_to_hass
+        available
+    """
 
-#     IDE_SENSOR_TYPE = "historical_power_demand"
+    IDE_SENSOR_TYPE = "historical_power_demand"
 
-#     @property  # Override IdeSensor.entity_registry_enabled_default
-#     def entity_registry_enabled_default(self):
-#         return False
+    @property  # Override IdeSensor.entity_registry_enabled_default
+    def entity_registry_enabled_default(self):
+        return False
 
-#     @property
-#     def device_class(self):
-#         return DEVICE_CLASS_ENERGY
+    @property
+    def device_class(self):
+        return DEVICE_CLASS_ENERGY
 
-#     @property
-#     def state_class(self):
-#         return STATE_CLASS_MEASUREMENT
+    @property
+    def state_class(self):
+        return STATE_CLASS_MEASUREMENT
 
-#     @property
-#     def unit_of_measurement(self):
-#         return ENERGY_KILO_WATT_HOUR
+    @property
+    def unit_of_measurement(self):
+        return ENERGY_KILO_WATT_HOUR
 
-#     @property
-#     def extra_state_attributes(self):
-#         return {
-#             ATTR_STATE_CLASS: self.state_class,
-#         }
+    @property
+    def extra_state_attributes(self):
+        return {
+            ATTR_STATE_CLASS: self.state_class,
+        }
 
-#     @property
-#     def state(self):
-#         return None
+    @property
+    def state(self):
+        return None
 
-#     @property
-#     def historical_states(self):
-#         if not self.coordinator.data:
-#             return None
+    @property
+    def historical_states(self):
+        data = self.coordinator.data[DATA_ATTR_HISTORICAL_POWER_DEMAND]
+        ret = [DatedState(when=item["dt"], state=item["value"]) for item in data]
 
-#         data = self.coordinator.data[DATA_ATTR_HISTORICAL_POWER_DEMAND]
-#         data = [
-#             DatedState(
-#                 state=value / 1000,
-#                 when=dt_util.as_utc(dt) + timedelta(hours=1),
-#                 attributes={"last_reset": dt_util.as_utc(dt)},
-#             )
-#             for (dt, value) in data["historical"]
-#         ]
+        return ret
 
-#         return data
+    async def async_update_historical_states(self):
+        pass
 
-#     async def async_update_historical_states(self):
-#         pass
-
-#     @callback
-#     def _handle_coordinator_update(self) -> None:
-#         self.async_write_ha_historical_states()
+    @callback
+    def _handle_coordinator_update(self) -> None:
+        self.async_write_ha_historical_states()
 
 
 async def async_setup_entry(
@@ -470,6 +443,9 @@ async def async_setup_entry(
             DataSetType.HISTORICAL_GENERATION: TimeDeltaBarrier(
                 delta=timedelta(hours=6)
             ),
+            DataSetType.HISTORICAL_POWER_DEMAND: TimeDeltaBarrier(
+                delta=timedelta(hours=36)
+            ),
         },
         update_interval=_calculate_datacoordinator_update_interval(),
     )
@@ -489,6 +465,9 @@ async def async_setup_entry(
         HistoricalGeneration(
             config_entry=config_entry, device_info=device_info, coordinator=coordinator
         ),
+        HistoricalPowerDemand(
+            config_entry=config_entry, device_info=device_info, coordinator=coordinator
+        ),
     ]
 
     add_entities(sensors, update_before_add=False)  # set update_before_add=False
@@ -505,3 +484,14 @@ def _calculate_datacoordinator_update_interval() -> timedelta:
     update_interval = max([MIN_SCAN_INTERVAL, update_interval])
 
     return timedelta(seconds=update_interval)
+
+
+def _historical_data_to_date_states(data: List[Dict] | None) -> List[DatedState]:
+    def _convert_item(item):
+        return DatedState(
+            state=item["value"] / 1000,
+            when=dt_util.as_utc(item["end"]),
+            attributes={"last_reset": dt_util.as_utc(item["start"])},
+        )
+
+    return [_convert_item(item) for item in data or []]

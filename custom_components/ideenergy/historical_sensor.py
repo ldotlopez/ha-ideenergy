@@ -21,7 +21,7 @@
 import functools
 import logging
 from abc import abstractmethod
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict
 
@@ -42,7 +42,7 @@ _LOGGER = logging.getLogger(__name__)
 class DatedState:
     state: Any
     when: datetime
-    attributes: Dict[str, Any]
+    attributes: Dict[str, Any] = field(default_factory=dict)
 
 
 # You must know:
