@@ -24,17 +24,16 @@ from typing import Any, Optional
 import ideenergy
 import voluptuous as vol
 from homeassistant import config_entries
-from homeassistant.const import CONF_NAME, CONF_PASSWORD, CONF_USERNAME
+from homeassistant.const import CONF_PASSWORD, CONF_USERNAME
 from homeassistant.core import callback  # noqa: F401
 from homeassistant.data_entry_flow import FlowResult
 from homeassistant.helpers.aiohttp_client import async_create_clientsession
 
 from . import _LOGGER
-from .const import CONF_CONTRACT, DEFAULT_NAME, DOMAIN
+from .const import CONF_CONTRACT, DOMAIN
 
 AUTH_SCHEMA = vol.Schema(
     {
-        vol.Required(CONF_NAME, default=DEFAULT_NAME): str,
         vol.Required(CONF_USERNAME, default=os.environ.get("HASS_IDE_USERNAME")): str,
         vol.Required(CONF_PASSWORD, default=os.environ.get("HASS_IDE_PASSWORD")): str,
     }
@@ -85,7 +84,6 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):  # type: ignore[call
                     {
                         CONF_USERNAME: username,
                         CONF_PASSWORD: password,
-                        CONF_NAME: user_input.get(CONF_NAME, DEFAULT_NAME),
                     }
                 )
                 return await self.async_step_contract()
@@ -111,11 +109,11 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):  # type: ignore[call
         self.info.update(
             {
                 CONF_CONTRACT: contract["codContrato"],
-                CONF_NAME: self.info[CONF_NAME] + "_" + contract["cups"],
             }
         )
 
-        return self.async_create_entry(title=self.info[CONF_NAME], data=self.info)
+        title = "CUPS " + contract["cups"]
+        return self.async_create_entry(title=title, data=self.info)
 
 
 # class OptionsFlowHandler(config_entries.OptionsFlow):

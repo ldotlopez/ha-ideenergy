@@ -17,14 +17,5 @@
                 }
             }
         }
-    },
-    "options": {
-        "step": {
-            "init": {
-                "data": {
-                    "enable_direct_measure": "Enable direct measure sensor"
-                }
-            }
-        }
     }
 }

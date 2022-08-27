@@ -22,14 +22,5 @@
 		"abort": {
 			"already_configured": "[%key:common::config_flow::abort::already_configured_device%]"
 		}
-	},
-	"options": {
-		"step": {
-			"init": {
-				"data": {
-					"enable_direct_measure": "[%key:common::config_flow::data::enable_direct_measure%]"
-				}
-			}
-		}
 	}
 }

@@ -33,7 +33,7 @@ from homeassistant.components.sensor import (
     SensorEntity,
 )
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import CONF_NAME, DEVICE_CLASS_ENERGY, ENERGY_KILO_WATT_HOUR
+from homeassistant.const import DEVICE_CLASS_ENERGY, ENERGY_KILO_WATT_HOUR
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
@@ -53,6 +53,7 @@ from .const import (
     MIN_SCAN_INTERVAL,
     UPDATE_WINDOW_END_MINUTE,
     UPDATE_WINDOW_START_MINUTE,
+    DEFAULT_NAME_PREFIX,
 )
 from .datacoordinator import (
     DATA_ATTR_HISTORICAL_CONSUMPTION,
@@ -81,8 +82,9 @@ class IdeSensor(SensorEntity):
     """
 
     def __init__(self, *args, config_entry, device_info, **kwargs):
+        cups = dict(device_info["identifiers"])["cups"].lower()
         self._unique_id = f"{config_entry.entry_id}-{self.IDE_SENSOR_TYPE}"
-        self._name = config_entry.data[CONF_NAME].lower() + f"_{self.IDE_SENSOR_TYPE}"
+        self._name = f"{DEFAULT_NAME_PREFIX}_{cups}_{self.IDE_SENSOR_TYPE}"
         self._device_info = device_info
 
         super().__init__(*args, **kwargs)
@@ -414,12 +416,10 @@ async def async_setup_entry(
     contract_details = await api.get_contract_details()
 
     device_info = DeviceInfo(
-        # TODO: check serial as valid identifier
         identifiers={
-            # (DOMAIN, self.unique_id),
-            ("serial", str(contract_details["listContador"][0]["numSerieEquipo"])),
+            ("cups", contract_details["cups"]),
         },
-        name=contract_details["cups"],
+        name=f"CUPS {contract_details['cups']}",
         # name=sanitize_address(details["direccion"]),
         manufacturer=contract_details["listContador"][0]["tipMarca"],
     )

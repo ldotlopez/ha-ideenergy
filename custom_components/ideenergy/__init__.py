@@ -40,7 +40,11 @@ _LOGGER = logging.getLogger(__name__)
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
-    """Set up i-de.es sensor from a config entry."""
+    if "name" in entry.data:
+        data = dict(entry.data)
+        data.pop("name")
+        hass.config_entries.async_update_entry(entry, data=data)
+
     sess = async_get_clientsession(hass)
     hass.data[DOMAIN] = hass.data.get(DOMAIN, {})
     hass.data[DOMAIN][entry.entry_id] = ideenergy.Client(
