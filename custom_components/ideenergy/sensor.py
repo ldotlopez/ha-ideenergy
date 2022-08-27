@@ -167,6 +167,10 @@ class DumbSensor(IdeSensor, CoordinatorEntity):
     def _handle_coordinator_update(self) -> None:
         self.async_write_ha_state()
 
+    @property  # Override Entity.entity_registry_visible_default
+    def entity_registry_visible_default(self):
+        return False
+
 
 class DirectReading(IdeSensor, CoordinatorEntity):
     """
@@ -271,6 +275,7 @@ class HistoricalConsumption(HistoricalSensor, IdeSensor, CoordinatorEntity):
 
     @property
     def historical_states(self):
+        _LOGGER.debug("historical_states accessed")
         ret = _historical_data_to_date_states(
             self.coordinator.data[DATA_ATTR_HISTORICAL_CONSUMPTION]["historical"]
         )
@@ -470,7 +475,7 @@ async def async_setup_entry(
         ),
     ]
 
-    add_entities(sensors, update_before_add=False)  # set update_before_add=False
+    add_entities(sensors, update_before_add=True)
 
 
 def _calculate_datacoordinator_update_interval() -> timedelta:
