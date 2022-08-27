@@ -20,6 +20,7 @@
 
 import functools
 import logging
+from abc import abstractmethod
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict
@@ -27,6 +28,7 @@ from typing import Any, Dict
 from homeassistant.components import recorder
 from homeassistant.components.recorder import db_schema
 from homeassistant.components.recorder.util import session_scope
+from homeassistant.helpers.entity import Entity
 from homeassistant.helpers.event import async_track_time_interval
 from homeassistant.util import dt as dt_util
 from sqlalchemy import not_, or_
@@ -245,8 +247,16 @@ class HistoricalEntityStandAlone:
             _LOGGER.debug(f"Added {len(db_states)} to database")
 
 
-class HistoricalEntity:
-    """The HistoricalEntity class provides:"""
+class HistoricalSensor:
+    """The HistoricalSensor class provides:
+
+    - should_poll
+    - state
+
+    Sensors based on HistoricalSensor must provide:
+    - async_update_historical_states
+    - historical_states property o self._historical_states
+    """
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -427,3 +437,41 @@ class HistoricalEntity:
             session.commit()
 
             _LOGGER.debug(f"Added {len(db_states)} to database")
+
+
+class CustomUpdateEntity(Entity):
+    """
+    CustomPolling provides:
+
+      - UPDATE_INTERVAL: timedelta
+      - async_added_to_hass(self)
+      - async_custom_update(self)
+    """
+
+    UPDATE_INTERVAL: timedelta = timedelta(seconds=30)
+
+    async def async_added_to_hass(self) -> None:
+        """Once added to hass:
+        - Setup internal stuff with the Store to hold internal state
+        - Setup a peridioc call to update the entity
+        """
+
+        if self.should_poll:
+            raise Exception("poll model is not supported")
+
+        _LOGGER.debug(f"{self.entity_id}: added to hass")  # type: ignore[attr-defined]
+
+        await self.async_custom_update()
+        async_track_time_interval(
+            self.hass,
+            self.async_custom_update,
+            self.UPDATE_INTERVAL,
+        )
+        _LOGGER.debug(
+            f"{self.entity_id}: "
+            f"updating each {self.UPDATE_INTERVAL.total_seconds()} seconds"
+        )
+
+    @abstractmethod
+    async def async_custom_update(self) -> None:
+        raise NotImplementedError()

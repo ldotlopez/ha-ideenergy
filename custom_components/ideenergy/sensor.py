@@ -62,7 +62,7 @@ from .datacoordinator import (
     DataSetType,
     IdeCoordinator,
 )
-from .historical_state import DatedState, HistoricalEntity
+from .historical_sensor import DatedState, HistoricalSensor
 
 ATTR_LAST_POWER_READING = "Last Power Reading"
 SCAN_INTERVAL = timedelta(seconds=5)
@@ -122,11 +122,6 @@ class IdeSensor(SensorEntity):
     #     # schedule_update_ha_state() (which is meant for push sensors but...)
 
     #     await super().async_added_to_hass()
-
-    #     import ipdb
-
-    #     ipdb.set_trace()
-    #     pass
 
     #     state = await self.async_get_last_state()
 
@@ -226,7 +221,7 @@ class DirectReading(IdeSensor, CoordinatorEntity):
         self.async_write_ha_state()
 
 
-class HistoricalConsumption(HistoricalEntity, IdeSensor, CoordinatorEntity):
+class HistoricalConsumption(HistoricalSensor, IdeSensor, CoordinatorEntity):
     """
     The IdeSensor class provides:
         __init__
@@ -276,14 +271,14 @@ class HistoricalConsumption(HistoricalEntity, IdeSensor, CoordinatorEntity):
         if not self.coordinator.data:
             return None
 
-        data = self.coordinator.data[DATA_ATTR_HISTORICAL_CONSUMPTION]
+        data = self.coordinator.data[DATA_ATTR_HISTORICAL_CONSUMPTION]["historical"]
         data = [
             DatedState(
                 state=value / 1000,
                 when=dt_util.as_utc(dt) + timedelta(hours=1),
                 attributes={"last_reset": dt_util.as_utc(dt)},
             )
-            for (dt, value) in data["historical"]
+            for (dt, value) in data
         ]
 
         return data
@@ -296,7 +291,7 @@ class HistoricalConsumption(HistoricalEntity, IdeSensor, CoordinatorEntity):
         self.async_write_ha_historical_states()
 
 
-class HistoricalGeneration(HistoricalEntity, IdeSensor, CoordinatorEntity):
+class HistoricalGeneration(HistoricalSensor, IdeSensor, CoordinatorEntity):
     """
     The IdeSensor class provides:
         __init__
@@ -366,7 +361,7 @@ class HistoricalGeneration(HistoricalEntity, IdeSensor, CoordinatorEntity):
         self.async_write_ha_historical_states()
 
 
-# class HistoricalPowerDemand(HistoricalEntity, IdeSensor, CoordinatorEntity):
+# class HistoricalPowerDemand(HistoricalSensor, IdeSensor, CoordinatorEntity):
 #     """
 #     The IdeSensor class provides:
 #         __init__

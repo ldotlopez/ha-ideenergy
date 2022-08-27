@@ -60,12 +60,20 @@ DATA_ATTR_HISTORICAL_CONSUMPTION = "historical_consumption"
 DATA_ATTR_HISTORICAL_GENERATION = "historical_generation"
 DATA_ATTR_HISTORICAL_POWER_DEMAND = "historical_power_demand"
 
-_DEFAULT_COORDINATOR_DATA = {
+_DEFAULT_COORDINATOR_DATA: Dict[str, Any] = {
     DATA_ATTR_MEASURE_ACCUMULATED: None,
     DATA_ATTR_MEASURE_INSTANT: None,
-    DATA_ATTR_HISTORICAL_CONSUMPTION: None,
-    DATA_ATTR_HISTORICAL_GENERATION: None,
-    DATA_ATTR_HISTORICAL_POWER_DEMAND: None,
+    DATA_ATTR_HISTORICAL_CONSUMPTION: {
+        "accumulated": None,
+        "accumulated-co2": None,
+        "historical": [],
+    },
+    DATA_ATTR_HISTORICAL_GENERATION: {
+        "accumulated": None,
+        "accumulated-co2": None,
+        "historical": [],
+    },
+    DATA_ATTR_HISTORICAL_POWER_DEMAND: [],
 }
 
 
@@ -162,8 +170,11 @@ class IdeCoordinator(DataUpdateCoordinator):
                     _LOGGER.debug(f"  → DataSet {dataset.name} not implemented yet")
                     continue
 
+            except UnicodeDecodeError:
+                _LOGGER.debug(f"{dataset.name}: invalid encoding. File a bug")
+
             except Exception as e:
-                _LOGGER.debug(f"**FIXME: handle {dataset.name} exception: {e!r}")
+                _LOGGER.debug(f"**FIXME**: handle {dataset.name} exception: {e!r}")
                 continue
 
             self.barriers[dataset].success()
