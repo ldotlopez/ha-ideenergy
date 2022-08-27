@@ -143,13 +143,11 @@ class IdeCoordinator(DataUpdateCoordinator):
                 self.barriers[dataset].check()
 
             except KeyError:
-                _LOGGER.debug(f"  → DataSet {dataset.name} ignored: no barrier defined")
+                _LOGGER.debug(f"{dataset.name} ignored: no barrier defined")
                 continue
 
             except BarrierDeniedError as deny:
-                _LOGGER.debug(
-                    f"  → DataSet {dataset.name} not allowed to run: {deny.reason}"
-                )
+                _LOGGER.debug(f"{dataset.name} not allowed to run: {deny.reason}")
                 continue
 
             # API calls and handle exceptions
@@ -167,11 +165,20 @@ class IdeCoordinator(DataUpdateCoordinator):
                     data.update(await self.get_historical_power_demand_data())
 
                 else:
-                    _LOGGER.debug(f"  → DataSet {dataset.name} not implemented yet")
+                    _LOGGER.debug(f"{dataset.name} not implemented yet")
                     continue
 
             except UnicodeDecodeError:
-                _LOGGER.debug(f"{dataset.name}: invalid encoding. File a bug")
+                _LOGGER.debug(f"{dataset.name} error: " f"invalid encoding. File a bug")
+                continue
+
+            except ideenergy.RequestFailedError as e:
+                _LOGGER.debug(
+                    f"{dataset.name} error: "
+                    f"{e.response.url} {e.response.reason} ({e.response.code})"
+                    f"{e}"
+                )
+                continue
 
             except Exception as e:
                 _LOGGER.debug(f"**FIXME**: handle {dataset.name} exception: {e!r}")
@@ -179,7 +186,7 @@ class IdeCoordinator(DataUpdateCoordinator):
 
             self.barriers[dataset].success()
 
-            _LOGGER.debug(f"  → DataSet {dataset.name} successfully updated")
+            _LOGGER.debug(f"{dataset.name} successfully updated")
 
         # delay = random.randint(DELAY_MIN_SECONDS * 10, DELAY_MAX_SECONDS * 10) / 10
         # _LOGGER.debug(f"  → Random delay: {delay} seconds")
