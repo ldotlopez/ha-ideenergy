@@ -32,11 +32,15 @@ from homeassistant.util import dt as dt_util
 
 from .barrier import Barrier, BarrierDeniedError
 from .const import (
-    DELAY_MAX_SECONDS,
-    DELAY_MIN_SECONDS,
     MIN_SCAN_INTERVAL,
     UPDATE_WINDOW_END_MINUTE,
     UPDATE_WINDOW_START_MINUTE,
+    HISTORICAL_PERIOD_LENGHT,
+    DATA_ATTR_MEASURE_ACCUMULATED,
+    DATA_ATTR_MEASURE_INSTANT,
+    DATA_ATTR_HISTORICAL_CONSUMPTION,
+    DATA_ATTR_HISTORICAL_GENERATION,
+    DATA_ATTR_HISTORICAL_POWER_DEMAND,
 )
 
 
@@ -50,15 +54,6 @@ class DataSetType(enum.IntFlag):
 
 
 _LOGGER = logging.getLogger(__name__)
-
-
-CoordinatorData = Dict[DataSetType, Dict[str, Any] | None]
-
-DATA_ATTR_MEASURE_ACCUMULATED = "measure_accumulated"
-DATA_ATTR_MEASURE_INSTANT = "measure_instant"
-DATA_ATTR_HISTORICAL_CONSUMPTION = "historical_consumption"
-DATA_ATTR_HISTORICAL_GENERATION = "historical_generation"
-DATA_ATTR_HISTORICAL_POWER_DEMAND = "historical_power_demand"
 
 _DEFAULT_COORDINATOR_DATA: Dict[str, Any] = {
     DATA_ATTR_MEASURE_ACCUMULATED: None,
@@ -88,13 +83,7 @@ class IdeCoordinator(DataUpdateCoordinator):
         name = (
             f"{api.username}/{api._contract} coordinator" if api else "i-de coordinator"
         )
-        super().__init__(
-            hass,
-            _LOGGER,
-            name=name,
-            update_interval=update_interval
-            or _calculate_datacoordinator_update_interval(),
-        )
+        super().__init__(hass, _LOGGER, name=name)
         self.api = api
         self.barriers = barriers
 
@@ -204,14 +193,14 @@ class IdeCoordinator(DataUpdateCoordinator):
 
     async def get_historical_consumption_data(self) -> Any:
         end = datetime.today()
-        start = end - timedelta(days=7)
+        start = end - HISTORICAL_PERIOD_LENGHT
         data = await self.api.get_historical_consumption(start=start, end=end)
 
         return {DATA_ATTR_HISTORICAL_CONSUMPTION: data}
 
     async def get_historical_generation_data(self) -> Any:
         end = datetime.today()
-        start = end - timedelta(days=7)
+        start = end - HISTORICAL_PERIOD_LENGHT
         data = await self.api.get_historical_generation(start=start, end=end)
 
         return {DATA_ATTR_HISTORICAL_GENERATION: data}
@@ -229,7 +218,7 @@ def _calculate_datacoordinator_update_interval() -> timedelta:
     update_window_width = (
         UPDATE_WINDOW_END_MINUTE * 60 - UPDATE_WINDOW_START_MINUTE * 60
     )
-    update_interval = math.floor(update_window_width / 2) - (DELAY_MAX_SECONDS * 2)
+    update_interval = math.floor(update_window_width / 2)
     update_interval = max([MIN_SCAN_INTERVAL, update_interval])
 
     return timedelta(seconds=update_interval)

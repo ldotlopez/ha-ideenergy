@@ -17,11 +17,6 @@
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301,
 # USA.
 
-
-"""The i-de.es sensor integration."""
-from __future__ import annotations
-
-from datetime import timedelta
 import logging
 
 from homeassistant.config_entries import ConfigEntry
@@ -34,7 +29,6 @@ from .const import DOMAIN, CONF_CONTRACT, API_USER_SESSION_TIMEOUT
 import ideenergy
 
 
-SCAN_INTERVAL = timedelta(seconds=10)
 PLATFORMS: list[str] = ["sensor"]
 _LOGGER = logging.getLogger(__name__)
 
@@ -63,8 +57,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
-    """Unload a config entry."""
-
     unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
 
     if unload_ok:

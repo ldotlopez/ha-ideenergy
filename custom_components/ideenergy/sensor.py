@@ -46,7 +46,6 @@ from homeassistant.util import dt as dt_util
 
 from .barrier import TimeDeltaBarrier, TimeWindowBarrier  # NoopBarrier,
 from .const import (
-    DELAY_MAX_SECONDS,
     DOMAIN,
     MAX_RETRIES,
     MEASURE_MAX_AGE,
@@ -485,7 +484,7 @@ def _calculate_datacoordinator_update_interval() -> timedelta:
     update_window_width = (
         UPDATE_WINDOW_END_MINUTE * 60 - UPDATE_WINDOW_START_MINUTE * 60
     )
-    update_interval = math.floor(update_window_width / 2) - (DELAY_MAX_SECONDS * 2)
+    update_interval = math.floor(update_window_width / 2)
     update_interval = max([MIN_SCAN_INTERVAL, update_interval])
 
     return timedelta(seconds=update_interval)

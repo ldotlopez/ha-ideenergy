@@ -17,17 +17,25 @@
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301,
 # USA.
 
+from datetime import timedelta
 
 DOMAIN = "ideenergy"
 DEFAULT_NAME_PREFIX = "ICP"
 
 CONF_CONTRACT = "contract"
-DELAY_MAX_SECONDS = 5
-DELAY_MIN_SECONDS = 1
-HISTORICAL_MAX_AGE = 60 * 60 * 6
+
 MEASURE_MAX_AGE = 60 * 50  # Fifty minutes
 MAX_RETRIES = 3
 MIN_SCAN_INTERVAL = 60
 UPDATE_WINDOW_START_MINUTE = 10
 UPDATE_WINDOW_END_MINUTE = 30
 API_USER_SESSION_TIMEOUT = 60
+
+
+DATA_ATTR_MEASURE_ACCUMULATED = "measure_accumulated"
+DATA_ATTR_MEASURE_INSTANT = "measure_instant"
+DATA_ATTR_HISTORICAL_CONSUMPTION = "historical_consumption"
+DATA_ATTR_HISTORICAL_GENERATION = "historical_generation"
+DATA_ATTR_HISTORICAL_POWER_DEMAND = "historical_power_demand"
+
+HISTORICAL_PERIOD_LENGHT = timedelta(days=7)
