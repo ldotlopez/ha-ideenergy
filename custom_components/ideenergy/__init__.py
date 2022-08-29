@@ -19,35 +19,31 @@
 
 import logging
 
+import ideenergy
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import CONF_USERNAME, CONF_PASSWORD
+from homeassistant.const import CONF_PASSWORD, CONF_USERNAME
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
-from .const import DOMAIN, CONF_CONTRACT, API_USER_SESSION_TIMEOUT
-
-import ideenergy
-
+from .const import API_USER_SESSION_TIMEOUT, CONF_CONTRACT, DOMAIN
 
 PLATFORMS: list[str] = ["sensor"]
 _LOGGER = logging.getLogger(__name__)
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
-    if "name" in entry.data:
-        data = dict(entry.data)
-        data.pop("name")
-        hass.config_entries.async_update_entry(entry, data=data)
+    _update_config_entry(hass, entry)
 
-    sess = async_get_clientsession(hass)
-    hass.data[DOMAIN] = hass.data.get(DOMAIN, {})
-    hass.data[DOMAIN][entry.entry_id] = ideenergy.Client(
-        session=sess,
+    api = ideenergy.Client(
+        session=async_get_clientsession(hass),
         username=entry.data[CONF_USERNAME],
         password=entry.data[CONF_PASSWORD],
         contract=entry.data[CONF_CONTRACT],
         user_session_timeout=API_USER_SESSION_TIMEOUT,
     )
+
+    hass.data[DOMAIN] = hass.data.get(DOMAIN, {})
+    hass.data[DOMAIN][entry.entry_id] = api
 
     hass.config_entries.async_setup_platforms(entry, PLATFORMS)
 
@@ -66,5 +62,11 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
 
 async def async_update_options(hass: HomeAssistant, entry: ConfigEntry) -> None:
-    """Handle options update."""
     await hass.config_entries.async_reload(entry.entry_id)
+
+
+def _update_config_entry(hass, entry):
+    if "name" in entry.data:
+        data = dict(entry.data)
+        data.pop("name")
+        hass.config_entries.async_update_entry(entry, data=data)

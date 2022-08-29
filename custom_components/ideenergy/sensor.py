@@ -24,8 +24,9 @@
 import logging
 import math
 from datetime import timedelta
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Set, Tuple
 
+import ideenergy
 from homeassistant.components.sensor import (
     ATTR_STATE_CLASS,
     STATE_CLASS_MEASUREMENT,
@@ -35,6 +36,7 @@ from homeassistant.components.sensor import (
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import DEVICE_CLASS_ENERGY, ENERGY_KILO_WATT_HOUR
 from homeassistant.core import HomeAssistant, callback
+from homeassistant.helpers import device_registry
 from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.restore_state import RestoreEntity
@@ -46,20 +48,20 @@ from homeassistant.util import dt as dt_util
 
 from .barrier import TimeDeltaBarrier, TimeWindowBarrier  # NoopBarrier,
 from .const import (
+    DEFAULT_NAME_PREFIX,
     DOMAIN,
     MAX_RETRIES,
     MEASURE_MAX_AGE,
     MIN_SCAN_INTERVAL,
     UPDATE_WINDOW_END_MINUTE,
     UPDATE_WINDOW_START_MINUTE,
-    DEFAULT_NAME_PREFIX,
 )
 from .datacoordinator import (
     DATA_ATTR_HISTORICAL_CONSUMPTION,
     DATA_ATTR_HISTORICAL_GENERATION,
+    DATA_ATTR_HISTORICAL_POWER_DEMAND,
     DATA_ATTR_MEASURE_ACCUMULATED,
     DATA_ATTR_MEASURE_INSTANT,
-    DATA_ATTR_HISTORICAL_POWER_DEMAND,
     DataSetType,
     IdeCoordinator,
 )
@@ -82,8 +84,8 @@ class IdeSensor(SensorEntity):
 
     def __init__(self, *args, config_entry, device_info, **kwargs):
         cups = dict(device_info["identifiers"])["cups"].lower()
-        self._unique_id = f"{config_entry.entry_id}-{self.IDE_SENSOR_TYPE}"
-        self._name = f"{DEFAULT_NAME_PREFIX}_{cups}_{self.IDE_SENSOR_TYPE}"
+        self._unique_id = f"{config_entry.entry_id}-{self.IDE_SENSOR_TYPE}".lower()
+        self._name = f"{DEFAULT_NAME_PREFIX}_{cups}_{self.IDE_SENSOR_TYPE}".lower()
         self._device_info = device_info
 
         super().__init__(*args, **kwargs)
@@ -416,12 +418,24 @@ async def async_setup_entry(
     discovery_info: Optional[DiscoveryInfoType] = None,  # noqa DiscoveryInfoType | None
 ):
     api = hass.data[DOMAIN][config_entry.entry_id]
-    contract_details = await api.get_contract_details()
+    try:
+        contract_details = await api.get_contract_details()
+    except ideenergy.client.ClientError as e:
+        _LOGGER.debug(f"Unable to initialize integration: {e}")
+
+    device_identifiers = {
+        ("cups", contract_details["cups"]),
+    }
+
+    # Update previous devices
+    _update_device_registry(
+        hass,
+        device_identifiers,
+        old_serial=str(contract_details["listContador"][0]["numSerieEquipo"]),
+    )
 
     device_info = DeviceInfo(
-        identifiers={
-            ("cups", contract_details["cups"]),
-        },
+        identifiers=device_identifiers,
         name=f"CUPS {contract_details['cups']}",
         # name=sanitize_address(details["direccion"]),
         manufacturer=contract_details["listContador"][0]["tipMarca"],
@@ -474,6 +488,23 @@ async def async_setup_entry(
     ]
 
     add_entities(sensors, update_before_add=True)
+
+
+def _update_device_registry(
+    hass: HomeAssistant,
+    identifiers: Set[Tuple[str, str]],
+    old_serial: str | None = None,
+):
+    dr = device_registry.async_get(hass)
+
+    # Check devices registered with CUPS as serial
+    if old_serial:
+        old_identifiers = {("serial", old_serial)}
+        old_device = dr.async_get_device(identifiers=old_identifiers)
+
+        if old_device:
+            _LOGGER.debug(f"Update device registry {old_identifiers} → {identifiers} ")
+            dr.async_update_device(old_device.id, new_identifiers=identifiers)
 
 
 def _calculate_datacoordinator_update_interval() -> timedelta:
