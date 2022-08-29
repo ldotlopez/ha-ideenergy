@@ -274,7 +274,6 @@ class HistoricalConsumption(HistoricalSensor, IdeSensor, CoordinatorEntity):
 
     @property
     def historical_states(self):
-        _LOGGER.debug("historical_states accessed")
         ret = _historical_data_to_date_states(
             self.coordinator.data[DATA_ATTR_HISTORICAL_CONSUMPTION]["historical"]
         )
