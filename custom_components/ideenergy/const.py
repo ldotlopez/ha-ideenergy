@@ -20,7 +20,7 @@
 from datetime import timedelta
 
 DOMAIN = "ideenergy"
-DEFAULT_NAME_PREFIX = "ICP"
+DEFAULT_NAME_PREFIX = "i_de"
 
 CONF_CONTRACT = "contract"
 

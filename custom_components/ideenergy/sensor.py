@@ -83,28 +83,17 @@ class IdeSensor(SensorEntity):
     """
 
     def __init__(self, *args, config_entry, device_info, **kwargs):
-        cups = dict(device_info["identifiers"])["cups"].lower()
-        self._unique_id = f"{config_entry.entry_id}-{self.IDE_SENSOR_TYPE}".lower()
-        self._name = f"{DEFAULT_NAME_PREFIX}_{cups}_{self.IDE_SENSOR_TYPE}".lower()
-        self._device_info = device_info
-
         super().__init__(*args, **kwargs)
 
-    @property
-    def name(self):
-        return self._name
+        cups = dict(device_info["identifiers"])["cups"].lower()
 
-    @property
-    def unique_id(self):
-        return self._unique_id
-
-    @property
-    def device_info(self):
-        return self._device_info
-
-    @property
-    def entity_registry_enabled_default(self):
-        return True
+        self.entity_id = f"sensor.{DEFAULT_NAME_PREFIX}_{cups}_{self.IDE_SENSOR_TYPE}"
+        self._attr_name = f"{device_info['name']} {self.IDE_SENSOR_NAME}"
+        self._attr_unique_id = f"{DEFAULT_NAME_PREFIX}-{cups}-{self.IDE_SENSOR_TYPE}"
+        self._attr_state_class = STATE_CLASS_MEASUREMENT
+        self._attr_device_info = device_info
+        self._attr_entity_registry_enabled_default = True
+        self._attr_entity_registry_visible_default = True
 
     def __repr__(self):
         clsname = self.__class__.__name__
@@ -159,18 +148,16 @@ class IdeSensor(SensorEntity):
 
 class DumbSensor(IdeSensor, CoordinatorEntity):
     IDE_SENSOR_TYPE = "dumb"
+    IDE_SENSOR_NAME = "Dumb"
 
-    @property
-    def state(self):
-        return "running"
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._attr_entity_registry_visible_default = False
+        self._attr_state = "running"
 
     @callback
     def _handle_coordinator_update(self) -> None:
         self.async_write_ha_state()
-
-    @property  # Override Entity.entity_registry_visible_default
-    def entity_registry_visible_default(self):
-        return False
 
 
 class DirectReading(IdeSensor, CoordinatorEntity):
@@ -190,19 +177,14 @@ class DirectReading(IdeSensor, CoordinatorEntity):
         available
     """
 
-    IDE_SENSOR_TYPE = "direct_reading"
+    IDE_SENSOR_NAME = "Accumulated"
+    IDE_SENSOR_TYPE = "accumulated"
 
-    @property
-    def device_class(self):
-        return DEVICE_CLASS_ENERGY
-
-    @property
-    def state_class(self):
-        return STATE_CLASS_TOTAL_INCREASING
-
-    @property
-    def unit_of_measurement(self):
-        return ENERGY_KILO_WATT_HOUR
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._attr_device_class = DEVICE_CLASS_ENERGY
+        self._attr_state_class = STATE_CLASS_TOTAL_INCREASING
+        self._attr_unit_of_measurement = ENERGY_KILO_WATT_HOUR
 
     @property
     def extra_state_attributes(self):
@@ -246,33 +228,19 @@ class HistoricalConsumption(HistoricalSensor, IdeSensor, CoordinatorEntity):
         available
     """
 
+    IDE_SENSOR_NAME = "Historical consumption"
     IDE_SENSOR_TYPE = "historical_consumption"
 
-    @property  # Override IdeSensor.entity_registry_enabled_default
-    def entity_registry_enabled_default(self):
-        return False
-
-    @property
-    def device_class(self):
-        return DEVICE_CLASS_ENERGY
-
-    @property
-    def state_class(self):
-        return STATE_CLASS_MEASUREMENT
-
-    @property
-    def unit_of_measurement(self):
-        return ENERGY_KILO_WATT_HOUR
-
-    @property
-    def extra_state_attributes(self):
-        return {
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._attr_device_class = DEVICE_CLASS_ENERGY
+        self._attr_state_class = STATE_CLASS_MEASUREMENT
+        self._attr_unit_of_measurement = ENERGY_KILO_WATT_HOUR
+        self._attr_entity_registry_enabled_default = False
+        self._attr_extra_state_attributes = {
             ATTR_STATE_CLASS: self.state_class,
         }
-
-    @property
-    def state(self):
-        return None
+        self._attr_state = None
 
     @property
     def historical_states(self):
@@ -281,9 +249,6 @@ class HistoricalConsumption(HistoricalSensor, IdeSensor, CoordinatorEntity):
         )
 
         return ret
-
-    async def async_update_historical_states(self):
-        pass
 
     @callback
     def _handle_coordinator_update(self) -> None:
@@ -307,33 +272,19 @@ class HistoricalGeneration(HistoricalSensor, IdeSensor, CoordinatorEntity):
         available
     """
 
+    IDE_SENSOR_NAME = "Historical generation"
     IDE_SENSOR_TYPE = "historical_generation"
 
-    @property  # Override IdeSensor.entity_registry_enabled_default
-    def entity_registry_enabled_default(self):
-        return False
-
-    @property
-    def device_class(self):
-        return DEVICE_CLASS_ENERGY
-
-    @property
-    def state_class(self):
-        return STATE_CLASS_MEASUREMENT
-
-    @property
-    def unit_of_measurement(self):
-        return ENERGY_KILO_WATT_HOUR
-
-    @property
-    def extra_state_attributes(self):
-        return {
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._attr_device_class = DEVICE_CLASS_ENERGY
+        self._attr_state_class = STATE_CLASS_MEASUREMENT
+        self._attr_unit_of_measurement = ENERGY_KILO_WATT_HOUR
+        self._attr_entity_registry_enabled_default = False
+        self._attr_extra_state_attributes = {
             ATTR_STATE_CLASS: self.state_class,
         }
-
-    @property
-    def state(self):
-        return None
+        self._attr_state = None
 
     @property
     def historical_states(self):
@@ -343,8 +294,8 @@ class HistoricalGeneration(HistoricalSensor, IdeSensor, CoordinatorEntity):
 
         return ret
 
-    async def async_update_historical_states(self):
-        pass
+    # async def async_update_historical_states(self):
+    #     pass
 
     @callback
     def _handle_coordinator_update(self) -> None:
@@ -368,33 +319,19 @@ class HistoricalPowerDemand(HistoricalSensor, IdeSensor, CoordinatorEntity):
         available
     """
 
+    IDE_SENSOR_NAME = "Historical power demand"
     IDE_SENSOR_TYPE = "historical_power_demand"
 
-    @property  # Override IdeSensor.entity_registry_enabled_default
-    def entity_registry_enabled_default(self):
-        return False
-
-    @property
-    def device_class(self):
-        return DEVICE_CLASS_ENERGY
-
-    @property
-    def state_class(self):
-        return STATE_CLASS_MEASUREMENT
-
-    @property
-    def unit_of_measurement(self):
-        return ENERGY_KILO_WATT_HOUR
-
-    @property
-    def extra_state_attributes(self):
-        return {
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._attr_device_class = DEVICE_CLASS_ENERGY
+        self._attr_state_class = STATE_CLASS_MEASUREMENT
+        self._attr_unit_of_measurement = ENERGY_KILO_WATT_HOUR
+        self._attr_entity_registry_enabled_default = False
+        self._attr_extra_state_attributes = {
             ATTR_STATE_CLASS: self.state_class,
         }
-
-    @property
-    def state(self):
-        return None
+        self._attr_state = None
 
     @property
     def historical_states(self):
@@ -403,8 +340,8 @@ class HistoricalPowerDemand(HistoricalSensor, IdeSensor, CoordinatorEntity):
 
         return ret
 
-    async def async_update_historical_states(self):
-        pass
+    # async def async_update_historical_states(self):
+    #     pass
 
     @callback
     def _handle_coordinator_update(self) -> None:
