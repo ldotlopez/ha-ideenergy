@@ -73,7 +73,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     update_integration(hass, entry, device_info)
 
-    coordinator = IdeCoordinator(
+    coordinator = IDeCoordinator(
         hass=hass,
         api=api,
         barriers={

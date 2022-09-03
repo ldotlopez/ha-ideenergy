@@ -77,7 +77,7 @@ class IDeSensor(SensorEntity):
         self.entity_id = f"{PLATFORM}." + _build_entity_name(
             config_entry, device_info, self.__class__
         )
-        self._attr_name = f"{device_info['name']} {self.IDE_SENSOR_NAME}"
+        self._attr_name = f"{device_info['name']} {self.I_DE_SENSOR_NAME}"
         self._attr_unique_id = _build_entity_unique_id(
             config_entry, device_info, self.__class__
         )
@@ -138,8 +138,8 @@ class IDeSensor(SensorEntity):
 
 
 class DumbSensor(IDeSensor, CoordinatorEntity):
-    IDE_SENSOR_TYPE = "dumb"
-    IDE_SENSOR_NAME = "Dumb"
+    I_DE_SENSOR_TYPE = "dumb"
+    I_DE_SENSOR_NAME = "Dumb"
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -168,8 +168,8 @@ class Accumulated(IDeSensor, CoordinatorEntity):
         available
     """
 
-    IDE_SENSOR_NAME = "Accumulated"
-    IDE_SENSOR_TYPE = "accumulated"
+    I_DE_SENSOR_NAME = "Accumulated"
+    I_DE_SENSOR_TYPE = "accumulated"
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -219,8 +219,8 @@ class HistoricalConsumption(HistoricalSensor, IDeSensor, CoordinatorEntity):
         available
     """
 
-    IDE_SENSOR_NAME = "Historical consumption"
-    IDE_SENSOR_TYPE = "historical-consumption"
+    I_DE_SENSOR_NAME = "Historical consumption"
+    I_DE_SENSOR_TYPE = "historical-consumption"
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -263,8 +263,8 @@ class HistoricalGeneration(HistoricalSensor, IDeSensor, CoordinatorEntity):
         available
     """
 
-    IDE_SENSOR_NAME = "Historical generation"
-    IDE_SENSOR_TYPE = "historical-generation"
+    I_DE_SENSOR_NAME = "Historical generation"
+    I_DE_SENSOR_TYPE = "historical-generation"
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -310,8 +310,8 @@ class HistoricalPowerDemand(HistoricalSensor, IDeSensor, CoordinatorEntity):
         available
     """
 
-    IDE_SENSOR_NAME = "Historical power demand"
-    IDE_SENSOR_TYPE = "historical-power-demand"
+    I_DE_SENSOR_NAME = "Historical power demand"
+    I_DE_SENSOR_TYPE = "historical-power-demand"
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -384,11 +384,11 @@ def _build_entity_unique_id(
     config_entry: ConfigEntry, device_info: DeviceInfo, SensorClass: SensorType
 ) -> str:
     cups = dict(device_info["identifiers"])["cups"]
-    return f"{config_entry.entry_id}-{cups}-{SensorClass.IDE_SENSOR_TYPE}"
+    return f"{config_entry.entry_id}-{cups}-{SensorClass.I_DE_SENSOR_TYPE}"
 
 
 def _build_entity_name(
     config_entry: ConfigEntry, device_info: DeviceInfo, SensorClass: SensorType
 ) -> str:
     cups = dict(device_info["identifiers"])["cups"]
-    return slugify(f"{DOMAIN}_{cups}_{SensorClass.IDE_SENSOR_TYPE}")
+    return slugify(f"{DOMAIN}_{cups}_{SensorClass.I_DE_SENSOR_TYPE}")
