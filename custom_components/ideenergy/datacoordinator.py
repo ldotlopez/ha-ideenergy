@@ -72,7 +72,7 @@ _DEFAULT_COORDINATOR_DATA: Dict[str, Any] = {
 }
 
 
-class IdeCoordinator(DataUpdateCoordinator):
+class IDeCoordinator(DataUpdateCoordinator):
     def __init__(
         self,
         hass,

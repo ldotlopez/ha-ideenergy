@@ -58,11 +58,11 @@ SCAN_INTERVAL = timedelta(seconds=5)
 PLATFORM = "sensor"
 _LOGGER = logging.getLogger(__name__)
 
-SensorType = Type["IdeSensor"]
+SensorType = Type["IDeSensor"]
 
 
-class IdeSensor(SensorEntity):
-    """The IdeSensor class provides:
+class IDeSensor(SensorEntity):
+    """The IDeSensor class provides:
     __init__
     __repr__
     name
@@ -137,7 +137,7 @@ class IdeSensor(SensorEntity):
     #         self.schedule_update_ha_state(force_refresh=True)
 
 
-class DumbSensor(IdeSensor, CoordinatorEntity):
+class DumbSensor(IDeSensor, CoordinatorEntity):
     IDE_SENSOR_TYPE = "dumb"
     IDE_SENSOR_NAME = "Dumb"
 
@@ -151,9 +151,9 @@ class DumbSensor(IdeSensor, CoordinatorEntity):
         self.async_write_ha_state()
 
 
-class Accumulated(IdeSensor, CoordinatorEntity):
+class Accumulated(IDeSensor, CoordinatorEntity):
     """
-    The IdeSensor class provides:
+    The IDeSensor class provides:
         __init__
         __repr__
         name
@@ -202,9 +202,9 @@ class Accumulated(IdeSensor, CoordinatorEntity):
         self.async_write_ha_state()
 
 
-class HistoricalConsumption(HistoricalSensor, IdeSensor, CoordinatorEntity):
+class HistoricalConsumption(HistoricalSensor, IDeSensor, CoordinatorEntity):
     """
-    The IdeSensor class provides:
+    The IDeSensor class provides:
         __init__
         __repr__
         name
@@ -246,9 +246,9 @@ class HistoricalConsumption(HistoricalSensor, IdeSensor, CoordinatorEntity):
         self.async_write_ha_historical_states()
 
 
-class HistoricalGeneration(HistoricalSensor, IdeSensor, CoordinatorEntity):
+class HistoricalGeneration(HistoricalSensor, IDeSensor, CoordinatorEntity):
     """
-    The IdeSensor class provides:
+    The IDeSensor class provides:
         __init__
         __repr__
         name
@@ -293,9 +293,9 @@ class HistoricalGeneration(HistoricalSensor, IdeSensor, CoordinatorEntity):
         self.async_write_ha_historical_states()
 
 
-class HistoricalPowerDemand(HistoricalSensor, IdeSensor, CoordinatorEntity):
+class HistoricalPowerDemand(HistoricalSensor, IDeSensor, CoordinatorEntity):
     """
-    The IdeSensor class provides:
+    The IDeSensor class provides:
         __init__
         __repr__
         name

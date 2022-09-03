@@ -40,7 +40,7 @@ from .const import (
     UPDATE_WINDOW_END_MINUTE,
     UPDATE_WINDOW_START_MINUTE,
 )
-from .datacoordinator import DataSetType, IdeCoordinator
+from .datacoordinator import DataSetType, IDeCoordinator
 
 PLATFORMS: list[str] = ["sensor"]
 _LOGGER = logging.getLogger(__name__)
