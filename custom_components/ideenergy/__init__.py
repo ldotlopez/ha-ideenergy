@@ -18,22 +18,35 @@
 # USA.
 
 import logging
+import math
+from datetime import timedelta
 
 import ideenergy
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_PASSWORD, CONF_USERNAME
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
+from homeassistant.helpers.entity import DeviceInfo
 
-from .const import API_USER_SESSION_TIMEOUT, CONF_CONTRACT, DOMAIN
+from .updates import update_integration
+from .barrier import TimeDeltaBarrier, TimeWindowBarrier  # NoopBarrier,
+from .const import (
+    API_USER_SESSION_TIMEOUT,
+    CONF_CONTRACT,
+    DOMAIN,
+    MAX_RETRIES,
+    MEASURE_MAX_AGE,
+    MIN_SCAN_INTERVAL,
+    UPDATE_WINDOW_END_MINUTE,
+    UPDATE_WINDOW_START_MINUTE,
+)
+from .datacoordinator import DataSetType, IdeCoordinator
 
 PLATFORMS: list[str] = ["sensor"]
 _LOGGER = logging.getLogger(__name__)
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
-    _update_config_entry(hass, entry)
-
     api = ideenergy.Client(
         session=async_get_clientsession(hass),
         username=entry.data[CONF_USERNAME],
@@ -42,8 +55,51 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         user_session_timeout=API_USER_SESSION_TIMEOUT,
     )
 
+    try:
+        contract_details = await api.get_contract_details()
+    except ideenergy.client.ClientError as e:
+        _LOGGER.debug(f"Unable to initialize integration: {e}")
+
+    device_identifiers = {
+        ("cups", contract_details["cups"]),
+    }
+
+    device_info = DeviceInfo(
+        identifiers=device_identifiers,
+        name=f"CUPS {contract_details['cups']}",
+        # name=sanitize_address(details["direccion"]),
+        manufacturer=contract_details["listContador"][0]["tipMarca"],
+    )
+
+    update_integration(hass, entry, device_info)
+
+    coordinator = IdeCoordinator(
+        hass=hass,
+        api=api,
+        barriers={
+            DataSetType.MEASURE: TimeWindowBarrier(
+                allowed_window_minutes=(
+                    UPDATE_WINDOW_START_MINUTE,
+                    UPDATE_WINDOW_END_MINUTE,
+                ),
+                max_retries=MAX_RETRIES,
+                max_age=timedelta(seconds=MEASURE_MAX_AGE),
+            ),
+            DataSetType.HISTORICAL_CONSUMPTION: TimeDeltaBarrier(
+                delta=timedelta(hours=6)
+            ),
+            DataSetType.HISTORICAL_GENERATION: TimeDeltaBarrier(
+                delta=timedelta(hours=6)
+            ),
+            DataSetType.HISTORICAL_POWER_DEMAND: TimeDeltaBarrier(
+                delta=timedelta(hours=36)
+            ),
+        },
+        update_interval=_calculate_datacoordinator_update_interval(),
+    )
+
     hass.data[DOMAIN] = hass.data.get(DOMAIN, {})
-    hass.data[DOMAIN][entry.entry_id] = api
+    hass.data[DOMAIN][entry.entry_id] = (coordinator, device_info)
 
     hass.config_entries.async_setup_platforms(entry, PLATFORMS)
 
@@ -65,8 +121,14 @@ async def async_update_options(hass: HomeAssistant, entry: ConfigEntry) -> None:
     await hass.config_entries.async_reload(entry.entry_id)
 
 
-def _update_config_entry(hass: HomeAssistant, entry: ConfigEntry):
-    if "name" in entry.data:
-        data = dict(entry.data)
-        data.pop("name")
-        hass.config_entries.async_update_entry(entry, data=data)
+def _calculate_datacoordinator_update_interval() -> timedelta:
+    #
+    # Calculate SCAN_INTERVAL to allow two updates within the update window
+    #
+    update_window_width = (
+        UPDATE_WINDOW_END_MINUTE * 60 - UPDATE_WINDOW_START_MINUTE * 60
+    )
+    update_interval = math.floor(update_window_width / 2)
+    update_interval = max([MIN_SCAN_INTERVAL, update_interval])
+
+    return timedelta(seconds=update_interval)

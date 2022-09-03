@@ -22,11 +22,9 @@
 # from homeassistant.core import callback
 
 import logging
-import math
 from datetime import timedelta
-from typing import Dict, List, Optional, Set, Tuple, Type
+from typing import Dict, List, Optional, Type
 
-import ideenergy
 from homeassistant.components.sensor import (
     ATTR_STATE_CLASS,
     STATE_CLASS_MEASUREMENT,
@@ -36,10 +34,8 @@ from homeassistant.components.sensor import (
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import DEVICE_CLASS_ENERGY, ENERGY_KILO_WATT_HOUR
 from homeassistant.core import HomeAssistant, callback
-from homeassistant.helpers import device_registry, entity_registry
 from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
-from homeassistant.helpers.restore_state import RestoreEntity
 from homeassistant.helpers.typing import DiscoveryInfoType
 from homeassistant.helpers.update_coordinator import (
     CoordinatorEntity,
@@ -47,23 +43,13 @@ from homeassistant.helpers.update_coordinator import (
 from homeassistant.util import dt as dt_util
 from homeassistant.util import slugify
 
-from .barrier import TimeDeltaBarrier, TimeWindowBarrier  # NoopBarrier,
-from .const import (
-    DOMAIN,
-    MAX_RETRIES,
-    MEASURE_MAX_AGE,
-    MIN_SCAN_INTERVAL,
-    UPDATE_WINDOW_END_MINUTE,
-    UPDATE_WINDOW_START_MINUTE,
-)
+from .const import DOMAIN
 from .datacoordinator import (
     DATA_ATTR_HISTORICAL_CONSUMPTION,
     DATA_ATTR_HISTORICAL_GENERATION,
     DATA_ATTR_HISTORICAL_POWER_DEMAND,
     DATA_ATTR_MEASURE_ACCUMULATED,
     DATA_ATTR_MEASURE_INSTANT,
-    DataSetType,
-    IdeCoordinator,
 )
 from .historical_sensor import DatedState, HistoricalSensor
 
@@ -88,11 +74,11 @@ class IdeSensor(SensorEntity):
     def __init__(self, *args, config_entry, device_info, **kwargs):
         super().__init__(*args, **kwargs)
 
-        self.entity_id = f"{PLATFORM}." + _build_name(
+        self.entity_id = f"{PLATFORM}." + _build_entity_name(
             config_entry, device_info, self.__class__
         )
         self._attr_name = f"{device_info['name']} {self.IDE_SENSOR_NAME}"
-        self._attr_unique_id = _build_unique_id(
+        self._attr_unique_id = _build_entity_unique_id(
             config_entry, device_info, self.__class__
         )
         self._attr_state_class = STATE_CLASS_MEASUREMENT
@@ -234,7 +220,7 @@ class HistoricalConsumption(HistoricalSensor, IdeSensor, CoordinatorEntity):
     """
 
     IDE_SENSOR_NAME = "Historical consumption"
-    IDE_SENSOR_TYPE = "historical_consumption"
+    IDE_SENSOR_TYPE = "historical-consumption"
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -278,7 +264,7 @@ class HistoricalGeneration(HistoricalSensor, IdeSensor, CoordinatorEntity):
     """
 
     IDE_SENSOR_NAME = "Historical generation"
-    IDE_SENSOR_TYPE = "historical_generation"
+    IDE_SENSOR_TYPE = "historical-generation"
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -325,7 +311,7 @@ class HistoricalPowerDemand(HistoricalSensor, IdeSensor, CoordinatorEntity):
     """
 
     IDE_SENSOR_NAME = "Historical power demand"
-    IDE_SENSOR_TYPE = "historical_power_demand"
+    IDE_SENSOR_TYPE = "historical-power-demand"
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -359,58 +345,7 @@ async def async_setup_entry(
     add_entities: AddEntitiesCallback,
     discovery_info: Optional[DiscoveryInfoType] = None,  # noqa DiscoveryInfoType | None
 ):
-    api = hass.data[DOMAIN][config_entry.entry_id]
-    try:
-        contract_details = await api.get_contract_details()
-    except ideenergy.client.ClientError as e:
-        _LOGGER.debug(f"Unable to initialize integration: {e}")
-
-    device_identifiers = {
-        ("cups", contract_details["cups"]),
-    }
-
-    # Update previous devices
-    _update_device_registry(
-        hass,
-        device_identifiers,
-        old_serial=str(contract_details["listContador"][0]["numSerieEquipo"]),
-    )
-
-    device_info = DeviceInfo(
-        identifiers=device_identifiers,
-        name=f"CUPS {contract_details['cups']}",
-        # name=sanitize_address(details["direccion"]),
-        manufacturer=contract_details["listContador"][0]["tipMarca"],
-    )
-
-    _update_entities_from_v0(hass, config_entry, device_info)
-
-    # Build coordinator
-    coordinator = IdeCoordinator(
-        hass=hass,
-        api=api,
-        barriers={
-            DataSetType.MEASURE: TimeWindowBarrier(
-                allowed_window_minutes=(
-                    UPDATE_WINDOW_START_MINUTE,
-                    UPDATE_WINDOW_END_MINUTE,
-                ),
-                max_retries=MAX_RETRIES,
-                max_age=timedelta(seconds=MEASURE_MAX_AGE),
-            ),
-            DataSetType.HISTORICAL_CONSUMPTION: TimeDeltaBarrier(
-                delta=timedelta(hours=6)
-            ),
-            DataSetType.HISTORICAL_GENERATION: TimeDeltaBarrier(
-                delta=timedelta(hours=6)
-            ),
-            DataSetType.HISTORICAL_POWER_DEMAND: TimeDeltaBarrier(
-                delta=timedelta(hours=36)
-            ),
-        },
-        update_interval=_calculate_datacoordinator_update_interval(),
-    )
-
+    coordinator, device_info = hass.data[DOMAIN][config_entry.entry_id]
     sensors = [
         DumbSensor(
             config_entry=config_entry,
@@ -434,69 +369,6 @@ async def async_setup_entry(
     add_entities(sensors, update_before_add=True)
 
 
-def _update_device_registry(
-    hass: HomeAssistant,
-    identifiers: Set[Tuple[str, str]],
-    old_serial: str | None = None,
-):
-    dr = device_registry.async_get(hass)
-
-    # Check devices registered with CUPS as serial
-    if old_serial:
-        old_identifiers = {("serial", old_serial)}
-        old_device = dr.async_get_device(identifiers=old_identifiers)
-
-        if old_device:
-            _LOGGER.debug(f"Update device registry {old_identifiers} → {identifiers} ")
-            dr.async_update_device(old_device.id, new_identifiers=identifiers)
-
-
-def _update_entities_from_v0(
-    hass: HomeAssistant, config_entry: ConfigEntry, device_info: DeviceInfo
-):
-    er = entity_registry.async_get(hass)
-
-    def _build_unique_id_v0(sensor_type: str):
-        # "unique_id": "dc5088dfcf71e4a1096539c61d057299-accumulated",
-        return f"{config_entry.entry_id}-{sensor_type}"
-
-    def _build_sensor_name_v0():
-        raise NotImplementedError
-
-    migrate = (("accumulated", Accumulated), ("historical", HistoricalGeneration))
-
-    for (old_sensor_type, new_sensor_cls) in migrate:
-        entity_id = er.async_get_entity_id(
-            "sensor", "ideenergy", _build_unique_id_v0(old_sensor_type)
-        )
-        if not entity_id:
-            continue
-
-        entity = er.async_get(entity_id)
-        if not entity:
-            continue
-
-        _LOGGER.debug(f"Detected old entity {entity_id}")
-        er.async_update_entity(
-            entity.entity_id,
-            new_unique_id=_build_unique_id(config_entry, device_info, new_sensor_cls),
-            original_name=_build_name(config_entry, device_info, new_sensor_cls),
-        )
-
-
-def _calculate_datacoordinator_update_interval() -> timedelta:
-    #
-    # Calculate SCAN_INTERVAL to allow two updates within the update window
-    #
-    update_window_width = (
-        UPDATE_WINDOW_END_MINUTE * 60 - UPDATE_WINDOW_START_MINUTE * 60
-    )
-    update_interval = math.floor(update_window_width / 2)
-    update_interval = max([MIN_SCAN_INTERVAL, update_interval])
-
-    return timedelta(seconds=update_interval)
-
-
 def _historical_data_to_date_states(data: List[Dict] | None) -> List[DatedState]:
     def _convert_item(item):
         return DatedState(
@@ -508,14 +380,14 @@ def _historical_data_to_date_states(data: List[Dict] | None) -> List[DatedState]
     return [_convert_item(item) for item in data or []]
 
 
-def _build_unique_id(
+def _build_entity_unique_id(
     config_entry: ConfigEntry, device_info: DeviceInfo, SensorClass: SensorType
 ) -> str:
     cups = dict(device_info["identifiers"])["cups"]
     return f"{config_entry.entry_id}-{cups}-{SensorClass.IDE_SENSOR_TYPE}"
 
 
-def _build_name(
+def _build_entity_name(
     config_entry: ConfigEntry, device_info: DeviceInfo, SensorClass: SensorType
 ) -> str:
     cups = dict(device_info["identifiers"])["cups"]
