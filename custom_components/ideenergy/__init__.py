@@ -65,7 +65,7 @@ async def async_update_options(hass: HomeAssistant, entry: ConfigEntry) -> None:
     await hass.config_entries.async_reload(entry.entry_id)
 
 
-def _update_config_entry(hass, entry):
+def _update_config_entry(hass: HomeAssistant, entry: ConfigEntry):
     if "name" in entry.data:
         data = dict(entry.data)
         data.pop("name")
