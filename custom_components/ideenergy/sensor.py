@@ -23,7 +23,7 @@
 
 import logging
 from datetime import timedelta
-from typing import Dict, List, Optional, Type
+from typing import Dict, List, Optional
 
 from homeassistant.components.sensor import (
     ATTR_STATE_CLASS,
@@ -34,14 +34,9 @@ from homeassistant.components.sensor import (
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import DEVICE_CLASS_ENERGY, ENERGY_KILO_WATT_HOUR
 from homeassistant.core import HomeAssistant, callback
-from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.typing import DiscoveryInfoType
-from homeassistant.helpers.update_coordinator import (
-    CoordinatorEntity,
-)  # DataUpdateCoordinator,; UpdateFailed,
 from homeassistant.util import dt as dt_util
-from homeassistant.util import slugify
 
 from .const import DOMAIN
 from .datacoordinator import (
@@ -51,6 +46,7 @@ from .datacoordinator import (
     DATA_ATTR_MEASURE_ACCUMULATED,
     DATA_ATTR_MEASURE_INSTANT,
 )
+from .entity import IDeEntity
 from .historical_sensor import DatedState, HistoricalSensor
 
 ATTR_LAST_POWER_READING = "Last Power Reading"
@@ -58,91 +54,11 @@ SCAN_INTERVAL = timedelta(seconds=5)
 PLATFORM = "sensor"
 _LOGGER = logging.getLogger(__name__)
 
-SensorType = Type["IDeSensor"]
 
-
-class IDeSensor(SensorEntity):
-    """The IDeSensor class provides:
-    __init__
-    __repr__
-    name
-    unique_id
-    device_info
-    entity_registry_enabled_default
-    """
-
-    def __init__(self, *args, config_entry, device_info, **kwargs):
-        super().__init__(*args, **kwargs)
-
-        self._attr_unique_id = _build_entity_unique_id(
-            config_entry, device_info, self.__class__
-        )
-
-        self.entity_id = _build_entity_entity_id(
-            config_entry, device_info, self.__class__
-        )
-
-        self._attr_name = _build_entity_name(config_entry, device_info, self.__class__)
-
-        self._attr_state_class = STATE_CLASS_MEASUREMENT
-        self._attr_device_info = device_info
-        self._attr_entity_registry_enabled_default = True
-        self._attr_entity_registry_visible_default = True
-
-    def __repr__(self):
-        clsname = self.__class__.__name__
-        if hasattr(self, "coordinator"):
-            api = self.coordinator.api.username
-        else:
-            api = self.api
-
-        return f"<{clsname} {api.username}/{api._contract}>"
-
-    # async def async_added_to_hass(self) -> None:
-    #     # Try to load previous state using RestoreEntity
-    #     #
-    #     # self.async_get_last_state().last_update is tricky and can't be trusted in our
-    #     # scenario. last_updated can be the last time HA exited because state is saved
-    #     # at exit with last_updated=exit_time, not last_updated=sensor_last_update
-    #     #
-    #     # It's easier to just load the value and schedule an update with
-    #     # schedule_update_ha_state() (which is meant for push sensors but...)
-
-    #     await super().async_added_to_hass()
-
-    #     state = await self.async_get_last_state()
-
-    #     if (
-    #         not state
-    #         or state.state is None
-    #         or state.state == STATE_UNKNOWN
-    #         or state.state == STATE_UNAVAILABLE
-    #     ):
-    #         self._logger.debug("restore state: No previous state")
-
-    #     else:
-    #         try:
-    #             self._state = float(state.state)
-    #             self._logger.debug(
-    #                 f"restore state: Got {self._state} {ENERGY_KILO_WATT_HOUR}"
-    #             )
-
-    #         except ValueError:
-    #             self._logger.debug(
-    #                 f"restore state: Discard invalid previous state {state!r}"
-    #             )
-
-    #     if self._state is None:
-    #         self._logger.debug(
-    #             "restore state: No previous state: scheduling force update"
-    #         )
-    #         self._barrier.force_next()
-    #         self.schedule_update_ha_state(force_refresh=True)
-
-
-class DumbSensor(IDeSensor, CoordinatorEntity):
+class DumbSensor(IDeEntity, SensorEntity):
     I_DE_SENSOR_TYPE = "dumb"
     I_DE_SENSOR_NAME = "Dumb"
+    I_DE_PLATFORM = PLATFORM
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -154,7 +70,7 @@ class DumbSensor(IDeSensor, CoordinatorEntity):
         self.async_write_ha_state()
 
 
-class Accumulated(IDeSensor, CoordinatorEntity):
+class Accumulated(IDeEntity, SensorEntity):
     """
     The IDeSensor class provides:
         __init__
@@ -173,6 +89,7 @@ class Accumulated(IDeSensor, CoordinatorEntity):
 
     I_DE_SENSOR_NAME = "Accumulated"
     I_DE_SENSOR_TYPE = "accumulated"
+    I_DE_PLATFORM = PLATFORM
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -205,7 +122,7 @@ class Accumulated(IDeSensor, CoordinatorEntity):
         self.async_write_ha_state()
 
 
-class HistoricalConsumption(HistoricalSensor, IDeSensor, CoordinatorEntity):
+class HistoricalConsumption(HistoricalSensor, IDeEntity, SensorEntity):
     """
     The IDeSensor class provides:
         __init__
@@ -224,6 +141,7 @@ class HistoricalConsumption(HistoricalSensor, IDeSensor, CoordinatorEntity):
 
     I_DE_SENSOR_NAME = "Historical consumption"
     I_DE_SENSOR_TYPE = "historical-consumption"
+    I_DE_PLATFORM = PLATFORM
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -249,7 +167,7 @@ class HistoricalConsumption(HistoricalSensor, IDeSensor, CoordinatorEntity):
         self.async_write_ha_historical_states()
 
 
-class HistoricalGeneration(HistoricalSensor, IDeSensor, CoordinatorEntity):
+class HistoricalGeneration(HistoricalSensor, IDeEntity, SensorEntity):
     """
     The IDeSensor class provides:
         __init__
@@ -268,6 +186,7 @@ class HistoricalGeneration(HistoricalSensor, IDeSensor, CoordinatorEntity):
 
     I_DE_SENSOR_NAME = "Historical generation"
     I_DE_SENSOR_TYPE = "historical-generation"
+    I_DE_PLATFORM = PLATFORM
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -296,7 +215,7 @@ class HistoricalGeneration(HistoricalSensor, IDeSensor, CoordinatorEntity):
         self.async_write_ha_historical_states()
 
 
-class HistoricalPowerDemand(HistoricalSensor, IDeSensor, CoordinatorEntity):
+class HistoricalPowerDemand(HistoricalSensor, IDeEntity, SensorEntity):
     """
     The IDeSensor class provides:
         __init__
@@ -315,6 +234,7 @@ class HistoricalPowerDemand(HistoricalSensor, IDeSensor, CoordinatorEntity):
 
     I_DE_SENSOR_NAME = "Historical power demand"
     I_DE_SENSOR_TYPE = "historical-power-demand"
+    I_DE_PLATFORM = PLATFORM
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -345,7 +265,7 @@ class HistoricalPowerDemand(HistoricalSensor, IDeSensor, CoordinatorEntity):
 async def async_setup_entry(
     hass: HomeAssistant,
     config_entry: ConfigEntry,
-    add_entities: AddEntitiesCallback,
+    async_add_devices: AddEntitiesCallback,
     discovery_info: Optional[DiscoveryInfoType] = None,  # noqa DiscoveryInfoType | None
 ):
     coordinator, device_info = hass.data[DOMAIN][config_entry.entry_id]
@@ -369,7 +289,7 @@ async def async_setup_entry(
         ),
     ]
 
-    add_entities(sensors, update_before_add=True)
+    async_add_devices(sensors)
 
 
 def _historical_data_to_date_states(data: List[Dict] | None) -> List[DatedState]:
@@ -381,25 +301,3 @@ def _historical_data_to_date_states(data: List[Dict] | None) -> List[DatedState]
         )
 
     return [_convert_item(item) for item in data or []]
-
-
-def _build_entity_unique_id(
-    config_entry: ConfigEntry, device_info: DeviceInfo, SensorClass: SensorType
-) -> str:
-    cups = dict(device_info["identifiers"])["cups"]
-    return f"{config_entry.entry_id}-{cups}-{SensorClass.I_DE_SENSOR_TYPE}".lower()
-
-
-def _build_entity_entity_id(
-    config_entry: ConfigEntry, device_info: DeviceInfo, SensorClass: SensorType
-) -> str:
-    cups = dict(device_info["identifiers"])["cups"]
-    base_id = slugify(f"{DOMAIN}_{cups}_{SensorClass.I_DE_SENSOR_TYPE}")
-
-    return f"{PLATFORM}.{base_id}".lower()
-
-
-def _build_entity_name(
-    config_entry: ConfigEntry, device_info: DeviceInfo, SensorClass: SensorType
-) -> str:
-    return " ".join(x.capitalize() for x in SensorClass.I_DE_SENSOR_TYPE.split("-"))

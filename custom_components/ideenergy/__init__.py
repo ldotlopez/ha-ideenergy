@@ -17,6 +17,7 @@
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301,
 # USA.
 
+import asyncio
 import logging
 import math
 from datetime import timedelta
@@ -25,10 +26,10 @@ import ideenergy
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_PASSWORD, CONF_USERNAME
 from homeassistant.core import HomeAssistant
+from homeassistant.exceptions import ConfigEntryNotReady
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.entity import DeviceInfo
 
-from .updates import update_integration
 from .barrier import TimeDeltaBarrier, TimeWindowBarrier  # NoopBarrier,
 from .const import (
     API_USER_SESSION_TIMEOUT,
@@ -41,6 +42,7 @@ from .const import (
     UPDATE_WINDOW_START_MINUTE,
 )
 from .datacoordinator import DataSetType, IDeCoordinator
+from .updates import update_integration
 
 PLATFORMS: list[str] = ["sensor"]
 _LOGGER = logging.getLogger(__name__)
@@ -95,28 +97,41 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         },
         update_interval=_calculate_datacoordinator_update_interval(),
     )
+    await coordinator.async_refresh()
+
+    if not coordinator.last_update_success:
+        raise ConfigEntryNotReady
 
     hass.data[DOMAIN] = hass.data.get(DOMAIN, {})
     hass.data[DOMAIN][entry.entry_id] = (coordinator, device_info)
 
     hass.config_entries.async_setup_platforms(entry, PLATFORMS)
 
-    entry.async_on_unload(entry.add_update_listener(async_update_options))
+    entry.async_on_unload(entry.add_update_listener(async_reload_entry))
 
     return True
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
-    unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
-
-    if unload_ok:
+    coordinator = hass.data[DOMAIN][entry.entry_id]
+    unloaded = all(
+        await asyncio.gather(
+            *[
+                hass.config_entries.async_forward_entry_unload(entry, platform)
+                for platform in PLATFORMS
+                if platform in coordinator.platforms
+            ]
+        )
+    )
+    if unloaded:
         hass.data[DOMAIN].pop(entry.entry_id)
 
-    return unload_ok
+    return unloaded
 
 
-async def async_update_options(hass: HomeAssistant, entry: ConfigEntry) -> None:
-    await hass.config_entries.async_reload(entry.entry_id)
+async def async_reload_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
+    await async_unload_entry(hass, entry)
+    await async_setup_entry(hass, entry)
 
 
 def _calculate_datacoordinator_update_interval() -> timedelta:

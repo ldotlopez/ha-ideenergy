@@ -9,6 +9,8 @@ from homeassistant.helpers.entity import DeviceInfo
 from .sensor import (
     Accumulated,
     HistoricalGeneration,
+)
+from .entity import (
     _build_entity_name,
     _build_entity_entity_id,
     _build_entity_unique_id,
@@ -79,7 +81,7 @@ def _update_entity_registry_v1(
             config_entry, device_info, new_sensor_cls
         )
         new_entity_id = _build_entity_entity_id(
-            config_entry, device_info, new_sensor_cls
+            config_entry, device_info, new_sensor_cls.I_DE_PLATFORM, new_sensor_cls
         )
         new_name = _build_entity_name(config_entry, device_info, new_sensor_cls)
 
