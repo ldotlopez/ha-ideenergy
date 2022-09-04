@@ -34,8 +34,8 @@ from .const import CONF_CONTRACT, DOMAIN
 
 AUTH_SCHEMA = vol.Schema(
     {
-        vol.Required(CONF_USERNAME, default=os.environ.get("HASS_IDE_USERNAME")): str,
-        vol.Required(CONF_PASSWORD, default=os.environ.get("HASS_IDE_PASSWORD")): str,
+        vol.Required(CONF_USERNAME, default=os.environ.get("HASS_I_DE_USERNAME")): str,
+        vol.Required(CONF_PASSWORD, default=os.environ.get("HASS_I_DE_PASSWORD")): str,
     }
 )
 
