@@ -74,13 +74,16 @@ class IDeSensor(SensorEntity):
     def __init__(self, *args, config_entry, device_info, **kwargs):
         super().__init__(*args, **kwargs)
 
-        self.entity_id = f"{PLATFORM}." + _build_entity_name(
-            config_entry, device_info, self.__class__
-        )
-        self._attr_name = f"{device_info['name']} {self.I_DE_SENSOR_NAME}"
         self._attr_unique_id = _build_entity_unique_id(
             config_entry, device_info, self.__class__
         )
+
+        self.entity_id = _build_entity_entity_id(
+            config_entry, device_info, self.__class__
+        )
+
+        self._attr_name = _build_entity_name(config_entry, device_info, self.__class__)
+
         self._attr_state_class = STATE_CLASS_MEASUREMENT
         self._attr_device_info = device_info
         self._attr_entity_registry_enabled_default = True
@@ -384,11 +387,19 @@ def _build_entity_unique_id(
     config_entry: ConfigEntry, device_info: DeviceInfo, SensorClass: SensorType
 ) -> str:
     cups = dict(device_info["identifiers"])["cups"]
-    return f"{config_entry.entry_id}-{cups}-{SensorClass.I_DE_SENSOR_TYPE}"
+    return f"{config_entry.entry_id}-{cups}-{SensorClass.I_DE_SENSOR_TYPE}".lower()
+
+
+def _build_entity_entity_id(
+    config_entry: ConfigEntry, device_info: DeviceInfo, SensorClass: SensorType
+) -> str:
+    cups = dict(device_info["identifiers"])["cups"]
+    base_id = slugify(f"{DOMAIN}_{cups}_{SensorClass.I_DE_SENSOR_TYPE}")
+
+    return f"{PLATFORM}.{base_id}".lower()
 
 
 def _build_entity_name(
     config_entry: ConfigEntry, device_info: DeviceInfo, SensorClass: SensorType
 ) -> str:
-    cups = dict(device_info["identifiers"])["cups"]
-    return slugify(f"{DOMAIN}_{cups}_{SensorClass.I_DE_SENSOR_TYPE}")
+    return " ".join(x.capitalize() for x in SensorClass.I_DE_SENSOR_TYPE.split("-"))

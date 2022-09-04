@@ -10,6 +10,7 @@ from .sensor import (
     Accumulated,
     HistoricalGeneration,
     _build_entity_name,
+    _build_entity_entity_id,
     _build_entity_unique_id,
 )
 
@@ -19,12 +20,13 @@ _LOGGER = logging.getLogger(__name__)
 def update_integration(
     hass: HomeAssistant, config_entry: ConfigEntry, device_info: DeviceInfo
 ) -> None:
-    _update_config_entry(hass, config_entry)
-    _update_device_registry(hass, config_entry, device_info)
-    _update_entity_registry(hass, config_entry, device_info)
+    if config_entry.version < 2:
+        _update_config_entry_v1(hass, config_entry)
+        _update_device_registry_v1(hass, config_entry, device_info)
+        _update_entity_registry_v1(hass, config_entry, device_info)
 
 
-def _update_config_entry(hass: HomeAssistant, config_entry: ConfigEntry):
+def _update_config_entry_v1(hass: HomeAssistant, config_entry: ConfigEntry):
     if "name" in config_entry.data:
         data = dict(config_entry.data)
         data["name"]
@@ -32,7 +34,7 @@ def _update_config_entry(hass: HomeAssistant, config_entry: ConfigEntry):
         _LOGGER.debug(f"Updated ConfigEntry '{config_entry.entry_id}'")
 
 
-def _update_device_registry(
+def _update_device_registry_v1(
     hass: HomeAssistant,
     config_entry: ConfigEntry,
     device_info: DeviceInfo,
@@ -51,7 +53,7 @@ def _update_device_registry(
         _LOGGER.debug(f"Updated DeviceEntry '{dev.id}' ({old_ids} → {new_ids})")
 
 
-def _update_entity_registry(
+def _update_entity_registry_v1(
     hass: HomeAssistant,
     config_entry: ConfigEntry,
     device_info: DeviceInfo,
@@ -63,7 +65,7 @@ def _update_entity_registry(
         entity_id = er.async_get_entity_id(
             "sensor",
             "ideenergy",
-            _build_entity_unique_id_v0(config_entry, old_sensor_type),
+            _build_entity_unique_id_v1(config_entry, old_sensor_type),
         )
         if not entity_id:
             continue
@@ -75,12 +77,16 @@ def _update_entity_registry(
         old_unique_id = entity.unique_id
         new_unique_id = _build_entity_unique_id(
             config_entry, device_info, new_sensor_cls
-        ).lower()
+        )
+        new_entity_id = _build_entity_entity_id(
+            config_entry, device_info, new_sensor_cls
+        )
         new_name = _build_entity_name(config_entry, device_info, new_sensor_cls)
 
         er.async_update_entity(
             entity.entity_id,
             new_unique_id=new_unique_id,
+            new_entity_id=new_entity_id,
             original_name=new_name,
         )
         _LOGGER.debug(
@@ -88,6 +94,6 @@ def _update_entity_registry(
         )
 
 
-def _build_entity_unique_id_v0(config_entry: ConfigEntry, sensor_type: str):
+def _build_entity_unique_id_v1(config_entry: ConfigEntry, sensor_type: str):
     # "unique_id": "dc5088dfcf71e4a1096539c61d057299-accumulated",
     return f"{config_entry.entry_id}-{sensor_type}"

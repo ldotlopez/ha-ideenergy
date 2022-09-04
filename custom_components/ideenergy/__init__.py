@@ -71,8 +71,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         manufacturer=contract_details["listContador"][0]["tipMarca"],
     )
 
-    update_integration(hass, entry, device_info)
-
     coordinator = IDeCoordinator(
         hass=hass,
         api=api,
@@ -132,3 +130,32 @@ def _calculate_datacoordinator_update_interval() -> timedelta:
     update_interval = max([MIN_SCAN_INTERVAL, update_interval])
 
     return timedelta(seconds=update_interval)
+
+
+async def async_migrate_entry(hass: HomeAssistant, config_entry: ConfigEntry):
+    api = ideenergy.Client(
+        session=async_get_clientsession(hass),
+        username=config_entry.data[CONF_USERNAME],
+        password=config_entry.data[CONF_PASSWORD],
+        contract=config_entry.data[CONF_CONTRACT],
+        user_session_timeout=API_USER_SESSION_TIMEOUT,
+    )
+
+    try:
+        contract_details = await api.get_contract_details()
+    except ideenergy.client.ClientError as e:
+        _LOGGER.debug(f"Unable to initialize integration: {e}")
+
+    device_identifiers = {
+        ("cups", contract_details["cups"]),
+    }
+
+    device_info = DeviceInfo(
+        identifiers=device_identifiers,
+        name=f"CUPS {contract_details['cups']}",
+        # name=sanitize_address(details["direccion"]),
+        manufacturer=contract_details["listContador"][0]["tipMarca"],
+    )
+
+    update_integration(hass, config_entry, device_info)
+    return True

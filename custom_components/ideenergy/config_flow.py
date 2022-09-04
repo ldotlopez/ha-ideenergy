@@ -41,7 +41,7 @@ AUTH_SCHEMA = vol.Schema(
 
 
 class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):  # type: ignore[call-arg]
-    VERSION = 1
+    VERSION = 2
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
