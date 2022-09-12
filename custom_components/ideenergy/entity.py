@@ -43,6 +43,8 @@ class IDeEntity(CoordinatorEntity):
     entity_registry_enabled_default
     """
 
+    I_DE_DATA_SETS = []  # type: ignore[var-annotated]
+
     def __init__(self, *args, config_entry, device_info, **kwargs):
         super().__init__(*args, **kwargs)
 
@@ -68,6 +70,14 @@ class IDeEntity(CoordinatorEntity):
             api = self.api
 
         return f"<{clsname} {api.username}/{api._contract}>"
+
+    async def async_added_to_hass(self) -> None:
+        await super().async_added_to_hass()
+        self.coordinator.register_sensor(self)
+
+    async def async_will_remove_from_hass(self) -> None:
+        self.coordinator.unregister_sensor(self)
+        await super().async_will_remove_from_hass()
 
     # async def async_added_to_hass(self) -> None:
     #     # Try to load previous state using RestoreEntity

@@ -40,6 +40,7 @@ from homeassistant.util import dt as dt_util
 
 from .const import DOMAIN
 from .datacoordinator import (
+    DataSetType,
     DATA_ATTR_HISTORICAL_CONSUMPTION,
     DATA_ATTR_HISTORICAL_GENERATION,
     DATA_ATTR_HISTORICAL_POWER_DEMAND,
@@ -90,6 +91,7 @@ class Accumulated(IDeEntity, SensorEntity):
     I_DE_SENSOR_NAME = "Accumulated"
     I_DE_SENSOR_TYPE = "accumulated"
     I_DE_PLATFORM = PLATFORM
+    I_DE_DATA_SETS = [DataSetType.MEASURE]
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -142,6 +144,7 @@ class HistoricalConsumption(HistoricalSensor, IDeEntity, SensorEntity):
     I_DE_SENSOR_NAME = "Historical consumption"
     I_DE_SENSOR_TYPE = "historical-consumption"
     I_DE_PLATFORM = PLATFORM
+    I_DE_DATA_SETS = [DataSetType.HISTORICAL_CONSUMPTION]
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -187,6 +190,7 @@ class HistoricalGeneration(HistoricalSensor, IDeEntity, SensorEntity):
     I_DE_SENSOR_NAME = "Historical generation"
     I_DE_SENSOR_TYPE = "historical-generation"
     I_DE_PLATFORM = PLATFORM
+    I_DE_DATA_SETS = [DataSetType.HISTORICAL_GENERATION]
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -235,6 +239,7 @@ class HistoricalPowerDemand(HistoricalSensor, IDeEntity, SensorEntity):
     I_DE_SENSOR_NAME = "Historical power demand"
     I_DE_SENSOR_TYPE = "historical-power-demand"
     I_DE_PLATFORM = PLATFORM
+    I_DE_DATA_SETS = [DataSetType.HISTORICAL_POWER_DEMAND]
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -270,11 +275,11 @@ async def async_setup_entry(
 ):
     coordinator, device_info = hass.data[DOMAIN][config_entry.entry_id]
     sensors = [
-        DumbSensor(
-            config_entry=config_entry,
-            device_info=device_info,
-            coordinator=coordinator,
-        ),
+        # DumbSensor(
+        #     config_entry=config_entry,
+        #     device_info=device_info,
+        #     coordinator=coordinator,
+        # ),
         Accumulated(
             config_entry=config_entry, device_info=device_info, coordinator=coordinator
         ),

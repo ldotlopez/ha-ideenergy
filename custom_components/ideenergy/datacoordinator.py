@@ -42,13 +42,15 @@ from .const import (
     UPDATE_WINDOW_END_MINUTE,
     UPDATE_WINDOW_START_MINUTE,
 )
+from .entity import IDeEntity
 
 
 class DataSetType(enum.IntFlag):
-    MEASURE = 2**0
-    HISTORICAL_CONSUMPTION = 2**1
-    HISTORICAL_GENERATION = 2**2
-    HISTORICAL_POWER_DEMAND = 2**3
+    NONE = 0
+    MEASURE = 1 << 0
+    HISTORICAL_CONSUMPTION = 1 << 1
+    HISTORICAL_GENERATION = 1 << 2
+    HISTORICAL_POWER_DEMAND = 1 << 3
 
     ALL = 0b1111
 
@@ -83,12 +85,22 @@ class IDeCoordinator(DataUpdateCoordinator):
         name = (
             f"{api.username}/{api._contract} coordinator" if api else "i-de coordinator"
         )
-        super().__init__(hass, _LOGGER, name=name)
+        super().__init__(hass, _LOGGER, name=name, update_interval=update_interval)
         self.api = api
         self.barriers = barriers
+        self.platforms = []  # type: ignore[var-annotated]
+        self.sensors = []  # type: ignore[var-annotated]
 
     def utcnow(self):
         return dt_util.utcnow()
+
+    def register_sensor(self, sensor: IDeEntity) -> None:
+        self.sensors.append(sensor)
+        _LOGGER.debug(f"Registered sensor {sensor.__class__}")
+
+    def unregister_sensor(self, sensor: IDeEntity) -> None:
+        self.sensors.remove(sensor)
+        _LOGGER.debug(f"Unregistered sensor {sensor.__class__}")
 
     async def _async_update_data(self):
         """Fetch data from API endpoint.
@@ -107,8 +119,15 @@ class IDeCoordinator(DataUpdateCoordinator):
 
         # Raise UpdateFailed is something were wrong
 
-        updated_data = await self._async_update_data_raw()
+        ds = DataSetType.NONE
+        for sensor in self.sensors:
+            for s_ds in sensor.I_DE_DATA_SETS:
+                ds = ds | s_ds
 
+        # updated_data = await self._async_update_data_raw()
+        updated_data = {}
+
+        _LOGGER.debug(f"Updating data set: {ds!r}")
         data = (self.data or _DEFAULT_COORDINATOR_DATA) | updated_data
         return data
 
