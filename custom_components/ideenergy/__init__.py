@@ -95,9 +95,12 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                 delta=timedelta(hours=36)
             ),
         },
-        update_interval=_calculate_datacoordinator_update_interval(),
+        update_interval=timedelta(seconds=30)
+        # update_interval=_calculate_datacoordinator_update_interval(),
     )
-    await coordinator.async_refresh()
+
+    # Don't refresh coordinator yet since there isn't any sensor registered
+    # await coordinator.async_refresh()
 
     if not coordinator.last_update_success:
         raise ConfigEntryNotReady
@@ -105,7 +108,12 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     hass.data[DOMAIN] = hass.data.get(DOMAIN, {})
     hass.data[DOMAIN][entry.entry_id] = (coordinator, device_info)
 
-    hass.config_entries.async_setup_platforms(entry, PLATFORMS)
+    for platform in PLATFORMS:
+        if entry.options.get(platform, True):
+            coordinator.platforms.append(platform)
+            hass.async_add_job(
+                hass.config_entries.async_forward_entry_setup(entry, platform)
+            )
 
     entry.async_on_unload(entry.add_update_listener(async_reload_entry))
 
@@ -113,7 +121,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
-    coordinator = hass.data[DOMAIN][entry.entry_id]
+    coordinator, _ = hass.data[DOMAIN][entry.entry_id]
     unloaded = all(
         await asyncio.gather(
             *[
