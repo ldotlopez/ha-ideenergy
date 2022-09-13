@@ -7,6 +7,8 @@ name = "pypi"
 
 [dev-packages]
 homeassistant = ">=2022.8.0"
+ipython = "*"
+ipdb = "*"
 
 [requires]
 python_version = "3"

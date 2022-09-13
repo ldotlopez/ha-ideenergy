@@ -27,7 +27,7 @@ from typing import Any, Dict
 import ideenergy
 from homeassistant.helpers.update_coordinator import (
     DataUpdateCoordinator,
-)  # ConfigEntryAuthFailed,; UpdateFailed,
+)  # ConfigEntryAuthFailed,; UpdateFailed
 from homeassistant.util import dt as dt_util
 
 from .barrier import Barrier, BarrierDeniedError
@@ -124,10 +124,11 @@ class IDeCoordinator(DataUpdateCoordinator):
             for s_ds in sensor.I_DE_DATA_SETS:
                 ds = ds | s_ds
 
-        # updated_data = await self._async_update_data_raw()
-        updated_data = {}
-
         _LOGGER.debug(f"Updating data set: {ds!r}")
+
+        # updated_data = {}
+        updated_data = await self._async_update_data_raw(datasets=ds)
+
         data = (self.data or _DEFAULT_COORDINATOR_DATA) | updated_data
         return data
 
@@ -228,16 +229,3 @@ class IDeCoordinator(DataUpdateCoordinator):
         data = await self.api.get_historical_power_demand()
 
         return {DATA_ATTR_HISTORICAL_POWER_DEMAND: data}
-
-
-def _calculate_datacoordinator_update_interval() -> timedelta:
-    #
-    # Calculate SCAN_INTERVAL to allow two updates within the update window
-    #
-    update_window_width = (
-        UPDATE_WINDOW_END_MINUTE * 60 - UPDATE_WINDOW_START_MINUTE * 60
-    )
-    update_interval = math.floor(update_window_width / 2)
-    update_interval = max([MIN_SCAN_INTERVAL, update_interval])
-
-    return timedelta(seconds=update_interval)

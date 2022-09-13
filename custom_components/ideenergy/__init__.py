@@ -95,8 +95,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                 delta=timedelta(hours=36)
             ),
         },
-        update_interval=timedelta(seconds=30)
+        # Use default update_interval and relay on barriers
         # update_interval=_calculate_datacoordinator_update_interval(),
+        update_interval=timedelta(seconds=30),
     )
 
     # Don't refresh coordinator yet since there isn't any sensor registered

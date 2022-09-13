@@ -56,21 +56,6 @@ PLATFORM = "sensor"
 _LOGGER = logging.getLogger(__name__)
 
 
-class DumbSensor(IDeEntity, SensorEntity):
-    I_DE_SENSOR_TYPE = "dumb"
-    I_DE_SENSOR_NAME = "Dumb"
-    I_DE_PLATFORM = PLATFORM
-
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self._attr_entity_registry_visible_default = False
-        self._attr_state = "running"
-
-    @callback
-    def _handle_coordinator_update(self) -> None:
-        self.async_write_ha_state()
-
-
 class Accumulated(IDeEntity, SensorEntity):
     """
     The IDeSensor class provides:
@@ -88,8 +73,8 @@ class Accumulated(IDeEntity, SensorEntity):
         available
     """
 
-    I_DE_SENSOR_NAME = "Accumulated"
     I_DE_SENSOR_TYPE = "accumulated"
+    I_DE_DATA_SETS = [DataSetType.MEASURE]
     I_DE_PLATFORM = PLATFORM
     I_DE_DATA_SETS = [DataSetType.MEASURE]
 
@@ -141,7 +126,6 @@ class HistoricalConsumption(HistoricalSensor, IDeEntity, SensorEntity):
         available
     """
 
-    I_DE_SENSOR_NAME = "Historical consumption"
     I_DE_SENSOR_TYPE = "historical-consumption"
     I_DE_PLATFORM = PLATFORM
     I_DE_DATA_SETS = [DataSetType.HISTORICAL_CONSUMPTION]
@@ -187,7 +171,6 @@ class HistoricalGeneration(HistoricalSensor, IDeEntity, SensorEntity):
         available
     """
 
-    I_DE_SENSOR_NAME = "Historical generation"
     I_DE_SENSOR_TYPE = "historical-generation"
     I_DE_PLATFORM = PLATFORM
     I_DE_DATA_SETS = [DataSetType.HISTORICAL_GENERATION]
@@ -236,8 +219,9 @@ class HistoricalPowerDemand(HistoricalSensor, IDeEntity, SensorEntity):
         available
     """
 
-    I_DE_SENSOR_NAME = "Historical power demand"
     I_DE_SENSOR_TYPE = "historical-power-demand"
+    I_DE_DATA_SETS = [DataSetType.HISTORICAL_POWER_DEMAND]
+
     I_DE_PLATFORM = PLATFORM
     I_DE_DATA_SETS = [DataSetType.HISTORICAL_POWER_DEMAND]
 

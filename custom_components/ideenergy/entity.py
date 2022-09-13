@@ -74,6 +74,7 @@ class IDeEntity(CoordinatorEntity):
     async def async_added_to_hass(self) -> None:
         await super().async_added_to_hass()
         self.coordinator.register_sensor(self)
+        await self.coordinator.async_request_refresh()
 
     async def async_will_remove_from_hass(self) -> None:
         self.coordinator.unregister_sensor(self)
