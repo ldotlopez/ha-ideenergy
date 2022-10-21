@@ -22,7 +22,6 @@
 # from homeassistant.core import callback
 
 import logging
-from datetime import timedelta
 from typing import Dict, List, Optional
 
 from homeassistant.components.sensor import (
@@ -40,18 +39,17 @@ from homeassistant.util import dt as dt_util
 
 from .const import DOMAIN
 from .datacoordinator import (
-    DataSetType,
     DATA_ATTR_HISTORICAL_CONSUMPTION,
     DATA_ATTR_HISTORICAL_GENERATION,
     DATA_ATTR_HISTORICAL_POWER_DEMAND,
     DATA_ATTR_MEASURE_ACCUMULATED,
     DATA_ATTR_MEASURE_INSTANT,
+    DataSetType,
 )
 from .entity import IDeEntity
 from .historical_sensor import DatedState, HistoricalSensor
 
 ATTR_LAST_POWER_READING = "Last Power Reading"
-SCAN_INTERVAL = timedelta(seconds=5)
 PLATFORM = "sensor"
 _LOGGER = logging.getLogger(__name__)
 
@@ -73,10 +71,9 @@ class Accumulated(IDeEntity, SensorEntity):
         available
     """
 
-    I_DE_SENSOR_TYPE = "accumulated"
+    I_DE_ENTITY_NAME = "accumulated"
     I_DE_DATA_SETS = [DataSetType.MEASURE]
     I_DE_PLATFORM = PLATFORM
-    I_DE_DATA_SETS = [DataSetType.MEASURE]
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -126,7 +123,7 @@ class HistoricalConsumption(HistoricalSensor, IDeEntity, SensorEntity):
         available
     """
 
-    I_DE_SENSOR_TYPE = "historical-consumption"
+    I_DE_ENTITY_NAME = "historical-consumption"
     I_DE_PLATFORM = PLATFORM
     I_DE_DATA_SETS = [DataSetType.HISTORICAL_CONSUMPTION]
 
@@ -171,7 +168,7 @@ class HistoricalGeneration(HistoricalSensor, IDeEntity, SensorEntity):
         available
     """
 
-    I_DE_SENSOR_TYPE = "historical-generation"
+    I_DE_ENTITY_NAME = "historical-generation"
     I_DE_PLATFORM = PLATFORM
     I_DE_DATA_SETS = [DataSetType.HISTORICAL_GENERATION]
 
@@ -219,7 +216,7 @@ class HistoricalPowerDemand(HistoricalSensor, IDeEntity, SensorEntity):
         available
     """
 
-    I_DE_SENSOR_TYPE = "historical-power-demand"
+    I_DE_ENTITY_NAME = "historical-power-demand"
     I_DE_DATA_SETS = [DataSetType.HISTORICAL_POWER_DEMAND]
 
     I_DE_PLATFORM = PLATFORM

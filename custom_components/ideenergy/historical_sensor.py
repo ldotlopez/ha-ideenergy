@@ -32,7 +32,8 @@ from homeassistant.const import STATE_UNAVAILABLE, STATE_UNKNOWN
 from homeassistant.helpers.entity import Entity
 from homeassistant.helpers.event import async_track_time_interval
 from homeassistant.util import dt as dt_util
-from sqlalchemy import and_, not_, or_
+from sqlalchemy import not_, or_
+
 from .hack import _build_attributes, _stringify_state
 
 _LOGGER = logging.getLogger(__name__)
@@ -149,13 +150,13 @@ class HistoricalSensor:
             try:
                 self._delete_invalid_states(session)
                 session.commit()
-                _LOGGER.debug(f"Recoder database clean.")
+                _LOGGER.debug("Recoder database clean.")
 
             except sqlalchemy.exc.IntegrityError:
                 session.rollback()
-                _LOGGER.debug(f"Warning: Current recorder schema is not supported")
+                _LOGGER.debug("Warning: Current recorder schema is not supported")
                 _LOGGER.debug(
-                    f"Invalid states can't be deleted from recorder."
+                    "Invalid states can't be deleted from recorder."
                     "This is not critical just unsightly for some graphs "
                 )
 
@@ -268,7 +269,8 @@ class HistoricalSensor:
 
         ##
         # Strategy: delete orphan StateAttributes
-        # This implementation is broken, we can end deleting states from other integrations
+        # This implementation is broken, we can end deleting states from other
+        # integrations
         ##
 
         # attr_ids_from_states = (

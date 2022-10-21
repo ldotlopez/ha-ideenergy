@@ -21,6 +21,8 @@
 # Maybe we need to mark some function as callback but I'm not sure whose.
 # from homeassistant.core import callback
 
+from typing import Type
+
 from homeassistant.components.sensor import STATE_CLASS_MEASUREMENT
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.helpers.entity import DeviceInfo
@@ -28,7 +30,6 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from homeassistant.util import slugify
 
 from .const import DOMAIN
-from typing import Type
 
 SensorType = Type["IDeEntity"]
 
@@ -48,11 +49,12 @@ class IDeEntity(CoordinatorEntity):
     def __init__(self, *args, config_entry, device_info, **kwargs):
         super().__init__(*args, **kwargs)
 
+        self._attr_has_entity_name = True
         self._attr_unique_id = _build_entity_unique_id(
             config_entry, device_info, self.__class__
         )
         self.entity_id = _build_entity_entity_id(
-            config_entry, device_info, self.I_DE_PLATFORM, self.__class__
+            config_entry, device_info, self.__class__
         )
 
         self._attr_name = _build_entity_name(config_entry, device_info, self.__class__)
@@ -123,22 +125,28 @@ class IDeEntity(CoordinatorEntity):
 
 
 def _build_entity_unique_id(
-    config_entry: ConfigEntry, device_info: DeviceInfo, SensorClass: SensorType
+    config_entry: ConfigEntry,
+    device_info: DeviceInfo,
+    SensorClass: SensorType,
 ) -> str:
     cups = dict(device_info["identifiers"])["cups"]
-    return f"{config_entry.entry_id}-{cups}-{SensorClass.I_DE_SENSOR_TYPE}".lower()
+    return (
+        f"{config_entry.entry_id}-{cups}-{SensorClass.I_DE_PLATFORM}"
+        f"-{SensorClass.I_DE_ENTITY_NAME}"
+    ).lower()
 
 
 def _build_entity_entity_id(
     config_entry: ConfigEntry,
     device_info: DeviceInfo,
-    platform: str,
     SensorClass: SensorType,
 ) -> str:
     cups = dict(device_info["identifiers"])["cups"]
-    base_id = slugify(f"{DOMAIN}_{cups}_{SensorClass.I_DE_SENSOR_TYPE}")
+    base_id = slugify(
+        f"{DOMAIN}_{cups}_{SensorClass.I_DE_PLATFORM}_{SensorClass.I_DE_ENTITY_NAME}"
+    )
 
-    return f"{platform}.{base_id}".lower()
+    return f"{SensorClass.I_DE_PLATFORM}.{base_id}".lower()
 
 
 def _build_entity_name(
@@ -146,4 +154,4 @@ def _build_entity_name(
     device_info: DeviceInfo,
     SensorClass: SensorType,
 ) -> str:
-    return " ".join(x.capitalize() for x in SensorClass.I_DE_SENSOR_TYPE.split("-"))
+    return " ".join(x.capitalize() for x in SensorClass.I_DE_ENTITY_NAME.split("-"))

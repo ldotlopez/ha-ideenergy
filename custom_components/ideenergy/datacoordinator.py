@@ -20,7 +20,6 @@
 
 import enum
 import logging
-import math
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict
 
@@ -38,9 +37,6 @@ from .const import (
     DATA_ATTR_MEASURE_ACCUMULATED,
     DATA_ATTR_MEASURE_INSTANT,
     HISTORICAL_PERIOD_LENGHT,
-    MIN_SCAN_INTERVAL,
-    UPDATE_WINDOW_END_MINUTE,
-    UPDATE_WINDOW_START_MINUTE,
 )
 from .entity import IDeEntity
 
