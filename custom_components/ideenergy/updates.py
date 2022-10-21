@@ -25,8 +25,8 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers import device_registry, entity_registry
 from homeassistant.helpers.entity import DeviceInfo
 
-from .entity import _build_entity_entity_id, _build_entity_name, _build_entity_unique_id
-from .sensor import Accumulated, HistoricalConsumption
+from .entity import _build_entity_entity_id, _build_entity_unique_id
+from .sensor import AccumulatedConsumption, HistoricalConsumption
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -73,7 +73,10 @@ def _update_entity_registry_v1(
     device_info: DeviceInfo,
 ):
     er = entity_registry.async_get(hass)
-    migrate = (("accumulated", Accumulated), ("historical", HistoricalConsumption))
+    migrate = (
+        ("accumulated", AccumulatedConsumption),
+        ("historical", HistoricalConsumption),
+    )
 
     for (old_sensor_type, new_sensor_cls) in migrate:
         entity_id = er.async_get_entity_id(
@@ -95,7 +98,7 @@ def _update_entity_registry_v1(
         new_entity_id = _build_entity_entity_id(
             config_entry, device_info, new_sensor_cls
         )
-        new_name = _build_entity_name(config_entry, device_info, new_sensor_cls)
+        new_name = new_sensor_cls.I_DE_ENTITY_NAME
 
         er.async_update_entity(
             entity.entity_id,

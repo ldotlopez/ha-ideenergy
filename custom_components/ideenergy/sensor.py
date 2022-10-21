@@ -56,26 +56,24 @@ PLATFORM = "sensor"
 _LOGGER = logging.getLogger(__name__)
 
 
-class Accumulated(IDeEntity, SensorEntity):
-    """
-    The IDeSensor class provides:
-        __init__
-        __repr__
-        name
-        unique_id
-        device_info
-        entity_registry_enabled_default
+# The IDeSensor class provides:
+#     __init__
+#     __repr__
+#     name
+#     unique_id
+#     device_info
+#     entity_registry_enabled_default
+# The CoordinatorEntity class provides:
+#     should_poll
+#     async_update
+#     async_added_to_hass
+#     available
 
-    The CoordinatorEntity class provides:
-        should_poll
-        async_update
-        async_added_to_hass
-        available
-    """
 
-    I_DE_ENTITY_NAME = "accumulated"
-    I_DE_DATA_SETS = [DataSetType.MEASURE]
+class AccumulatedConsumption(IDeEntity, SensorEntity):
     I_DE_PLATFORM = PLATFORM
+    I_DE_ENTITY_NAME = "Accumulated Consumption"
+    I_DE_DATA_SETS = [DataSetType.MEASURE]
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -109,24 +107,8 @@ class Accumulated(IDeEntity, SensorEntity):
 
 
 class HistoricalConsumption(HistoricalSensor, IDeEntity, SensorEntity):
-    """
-    The IDeSensor class provides:
-        __init__
-        __repr__
-        name
-        unique_id
-        device_info
-        entity_registry_enabled_default
-
-    The CoordinatorEntity class provides:
-        should_poll
-        async_update
-        async_added_to_hass
-        available
-    """
-
-    I_DE_ENTITY_NAME = "historical-consumption"
     I_DE_PLATFORM = PLATFORM
+    I_DE_ENTITY_NAME = "Historical Consumption"
     I_DE_DATA_SETS = [DataSetType.HISTORICAL_CONSUMPTION]
 
     def __init__(self, *args, **kwargs):
@@ -154,24 +136,8 @@ class HistoricalConsumption(HistoricalSensor, IDeEntity, SensorEntity):
 
 
 class HistoricalGeneration(HistoricalSensor, IDeEntity, SensorEntity):
-    """
-    The IDeSensor class provides:
-        __init__
-        __repr__
-        name
-        unique_id
-        device_info
-        entity_registry_enabled_default
-
-    The CoordinatorEntity class provides:
-        should_poll
-        async_update
-        async_added_to_hass
-        available
-    """
-
-    I_DE_ENTITY_NAME = "historical-generation"
     I_DE_PLATFORM = PLATFORM
+    I_DE_ENTITY_NAME = "Historical Generation"
     I_DE_DATA_SETS = [DataSetType.HISTORICAL_GENERATION]
 
     def __init__(self, *args, **kwargs):
@@ -202,26 +168,8 @@ class HistoricalGeneration(HistoricalSensor, IDeEntity, SensorEntity):
 
 
 class HistoricalPowerDemand(HistoricalSensor, IDeEntity, SensorEntity):
-    """
-    The IDeSensor class provides:
-        __init__
-        __repr__
-        name
-        unique_id
-        device_info
-        entity_registry_enabled_default
-
-    The CoordinatorEntity class provides:
-        should_poll
-        async_update
-        async_added_to_hass
-        available
-    """
-
-    I_DE_ENTITY_NAME = "historical-power-demand"
-    I_DE_DATA_SETS = [DataSetType.HISTORICAL_POWER_DEMAND]
-
     I_DE_PLATFORM = PLATFORM
+    I_DE_ENTITY_NAME = "Historical Power Demand"
     I_DE_DATA_SETS = [DataSetType.HISTORICAL_POWER_DEMAND]
 
     def __init__(self, *args, **kwargs):
@@ -263,7 +211,7 @@ async def async_setup_entry(
         #     device_info=device_info,
         #     coordinator=coordinator,
         # ),
-        Accumulated(
+        AccumulatedConsumption(
             config_entry=config_entry, device_info=device_info, coordinator=coordinator
         ),
         HistoricalConsumption(

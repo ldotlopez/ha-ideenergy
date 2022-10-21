@@ -45,20 +45,21 @@ class IDeEntity(CoordinatorEntity):
     entity_registry_enabled_default
     """
 
+    I_DE_ENTITY_NAME = ""
     I_DE_DATA_SETS = []  # type: ignore[var-annotated]
 
     def __init__(self, *args, config_entry, device_info, **kwargs):
         super().__init__(*args, **kwargs)
 
         self._attr_has_entity_name = True
+        self._attr_name = self.I_DE_ENTITY_NAME
+
         self._attr_unique_id = _build_entity_unique_id(
             config_entry, device_info, self.__class__
         )
         self.entity_id = _build_entity_entity_id(
             config_entry, device_info, self.__class__
         )
-
-        self._attr_name = _build_entity_name(config_entry, device_info, self.__class__)
 
         self._attr_state_class = STATE_CLASS_MEASUREMENT
         self._attr_device_info = device_info
@@ -130,9 +131,11 @@ def _build_entity_unique_id(
     device_info: DeviceInfo,
     SensorClass: SensorType,
 ) -> str:
-    cups = dict(device_info["identifiers"])["cups"]
+    # cups = dict(device_info["identifiers"])["cups"]
     return (
-        f"{config_entry.entry_id}-{cups}-{SensorClass.I_DE_PLATFORM}"
+        # f"{config_entry.entry_id}-{cups}-{SensorClass.I_DE_PLATFORM}-{SensorClass.I_DE_ENTITY_NAME}"
+        f"{config_entry.entry_id}"
+        f"-{SensorClass.I_DE_PLATFORM}"
         f"-{SensorClass.I_DE_ENTITY_NAME}"
     ).lower()
 
@@ -144,15 +147,10 @@ def _build_entity_entity_id(
 ) -> str:
     cups = dict(device_info["identifiers"])["cups"]
     base_id = slugify(
-        f"{DOMAIN}_{cups}_{SensorClass.I_DE_PLATFORM}_{SensorClass.I_DE_ENTITY_NAME}"
+        # f"{DOMAIN}_{cups}_{SensorClass.I_DE_PLATFORM}_{SensorClass.I_DE_ENTITY_NAME}"
+        f"{DOMAIN}"
+        f"_{cups}"
+        f"_{SensorClass.I_DE_ENTITY_NAME}"
     )
 
     return f"{SensorClass.I_DE_PLATFORM}.{base_id}".lower()
-
-
-def _build_entity_name(
-    config_entry: ConfigEntry,
-    device_info: DeviceInfo,
-    SensorClass: SensorType,
-) -> str:
-    return " ".join(x.capitalize() for x in SensorClass.I_DE_ENTITY_NAME.split("-"))

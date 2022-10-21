@@ -44,7 +44,8 @@ from .const import (
 from .datacoordinator import DataSetType, IDeCoordinator
 from .updates import update_integration
 
-PLATFORMS: list[str] = ["button", "sensor"]
+PLATFORMS: list[str] = ["sensor"]
+
 _LOGGER = logging.getLogger(__name__)
 
 
@@ -68,7 +69,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     device_info = DeviceInfo(
         identifiers=device_identifiers,
-        name=f"CUPS {contract_details['cups']}",
+        # name=f"CUPS {contract_details['cups']}",
+        name=f"{contract_details['cups']}",
         # name=sanitize_address(details["direccion"]),
         manufacturer=contract_details["listContador"][0]["tipMarca"],
     )
