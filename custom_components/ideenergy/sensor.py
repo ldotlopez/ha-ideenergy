@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 
-# Copyright (C) 2021 Luis López <luis@cuarentaydos.com>
+# Copyright (C) 2021-2022 Luis López <luis@cuarentaydos.com>
 #
 # This program is free software; you can redistribute it and/or
 # modify it under the terms of the GNU General Public License
@@ -17,9 +17,11 @@
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301,
 # USA.
 
+
 # TODO
 # Maybe we need to mark some function as callback but I'm not sure whose.
 # from homeassistant.core import callback
+
 
 import logging
 from typing import Dict, List, Optional
