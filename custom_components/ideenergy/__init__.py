@@ -17,6 +17,7 @@
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301,
 # USA.
 
+
 import asyncio
 import logging
 import math
@@ -50,30 +51,14 @@ _LOGGER = logging.getLogger(__name__)
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
-    api = ideenergy.Client(
-        session=async_get_clientsession(hass),
-        username=entry.data[CONF_USERNAME],
-        password=entry.data[CONF_PASSWORD],
-        contract=entry.data[CONF_CONTRACT],
-        user_session_timeout=API_USER_SESSION_TIMEOUT,
-    )
+    api = IDeEnergyAPI(hass, entry)
 
     try:
         contract_details = await api.get_contract_details()
     except ideenergy.client.ClientError as e:
         _LOGGER.debug(f"Unable to initialize integration: {e}")
 
-    device_identifiers = {
-        ("cups", contract_details["cups"]),
-    }
-
-    device_info = DeviceInfo(
-        identifiers=device_identifiers,
-        # name=f"CUPS {contract_details['cups']}",
-        name=f"{contract_details['cups']}",
-        # name=sanitize_address(details["direccion"]),
-        manufacturer=contract_details["listContador"][0]["tipMarca"],
-    )
+    device_info = IDeEnergyDeviceInfo(contract_details)
 
     coordinator = IDeCoordinator(
         hass=hass,
@@ -158,30 +143,33 @@ def _calculate_datacoordinator_update_interval() -> timedelta:
     return timedelta(seconds=update_interval)
 
 
-async def async_migrate_entry(hass: HomeAssistant, config_entry: ConfigEntry):
-    api = ideenergy.Client(
-        session=async_get_clientsession(hass),
-        username=config_entry.data[CONF_USERNAME],
-        password=config_entry.data[CONF_PASSWORD],
-        contract=config_entry.data[CONF_CONTRACT],
-        user_session_timeout=API_USER_SESSION_TIMEOUT,
-    )
+async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry):
+    api = IDeEnergyAPI(hass, entry)
 
     try:
         contract_details = await api.get_contract_details()
     except ideenergy.client.ClientError as e:
         _LOGGER.debug(f"Unable to initialize integration: {e}")
 
-    device_identifiers = {
-        ("cups", contract_details["cups"]),
-    }
+    update_integration(hass, entry, IDeEnergyDeviceInfo(contract_details))
+    return True
 
-    device_info = DeviceInfo(
-        identifiers=device_identifiers,
-        name=f"CUPS {contract_details['cups']}",
-        # name=sanitize_address(details["direccion"]),
+
+def IDeEnergyDeviceInfo(contract_details):
+    return DeviceInfo(
+        identifiers={
+            ("cups", contract_details["cups"]),
+        },
+        name=contract_details["cups"],
         manufacturer=contract_details["listContador"][0]["tipMarca"],
     )
 
-    update_integration(hass, config_entry, device_info)
-    return True
+
+def IDeEnergyAPI(hass: HomeAssistant, entry: ConfigEntry):
+    return ideenergy.Client(
+        session=async_get_clientsession(hass),
+        username=entry.data[CONF_USERNAME],
+        password=entry.data[CONF_PASSWORD],
+        contract=entry.data[CONF_CONTRACT],
+        user_session_timeout=API_USER_SESSION_TIMEOUT,
+    )

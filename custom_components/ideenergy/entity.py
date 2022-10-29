@@ -22,6 +22,7 @@
 # Maybe we need to mark some function as callback but I'm not sure whose.
 # from homeassistant.core import callback
 
+import logging
 from typing import Type
 
 from homeassistant.components.sensor import STATE_CLASS_MEASUREMENT
@@ -33,6 +34,9 @@ from homeassistant.util import slugify
 from .const import DOMAIN
 
 SensorType = Type["IDeEntity"]
+
+
+_LOGGER = logging.getLogger(__name__)
 
 
 class IDeEntity(CoordinatorEntity):
@@ -57,7 +61,7 @@ class IDeEntity(CoordinatorEntity):
         self._attr_unique_id = _build_entity_unique_id(
             config_entry, device_info, self.__class__
         )
-        self.entity_id = _build_entity_entity_id(
+        self._attr_entity_id = _build_entity_entity_id(
             config_entry, device_info, self.__class__
         )
 
@@ -77,6 +81,12 @@ class IDeEntity(CoordinatorEntity):
 
     async def async_added_to_hass(self) -> None:
         await super().async_added_to_hass()
+        _LOGGER.debug(
+            f"New sensor ready: "
+            f"unique_id={self.unique_id}, "
+            f"entity_id={self.entity_id}, "
+            f"name={self.name} "
+        )
         self.coordinator.register_sensor(self)
         await self.coordinator.async_request_refresh()
 
@@ -132,12 +142,13 @@ def _build_entity_unique_id(
     SensorClass: SensorType,
 ) -> str:
     # cups = dict(device_info["identifiers"])["cups"]
-    return (
-        # f"{config_entry.entry_id}-{cups}-{SensorClass.I_DE_PLATFORM}-{SensorClass.I_DE_ENTITY_NAME}"
-        f"{config_entry.entry_id}"
-        f"-{SensorClass.I_DE_PLATFORM}"
-        f"-{SensorClass.I_DE_ENTITY_NAME}"
-    ).lower()
+    # return slugify(
+    #     # f"{config_entry.entry_id}-{cups}-{SensorClass.I_DE_PLATFORM}-{SensorClass.I_DE_ENTITY_NAME}"
+    #     f"{config_entry.entry_id}"
+    #     f"-{SensorClass.I_DE_PLATFORM}"
+    #     f"-{SensorClass.I_DE_ENTITY_NAME}"
+    # ).replace("-", "_")
+    return slugify(SensorClass.I_DE_ENTITY_NAME).replace("_", "-")
 
 
 def _build_entity_entity_id(

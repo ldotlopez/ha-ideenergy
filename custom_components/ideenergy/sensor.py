@@ -206,11 +206,6 @@ async def async_setup_entry(
 ):
     coordinator, device_info = hass.data[DOMAIN][config_entry.entry_id]
     sensors = [
-        # DumbSensor(
-        #     config_entry=config_entry,
-        #     device_info=device_info,
-        #     coordinator=coordinator,
-        # ),
         AccumulatedConsumption(
             config_entry=config_entry, device_info=device_info, coordinator=coordinator
         ),
@@ -224,7 +219,6 @@ async def async_setup_entry(
             config_entry=config_entry, device_info=device_info, coordinator=coordinator
         ),
     ]
-
     async_add_devices(sensors)
 
 
