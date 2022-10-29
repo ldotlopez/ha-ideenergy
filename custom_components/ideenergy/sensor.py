@@ -29,7 +29,7 @@ from typing import Dict, List, Optional
 from homeassistant.components.sensor import (
     ATTR_STATE_CLASS,
     STATE_CLASS_MEASUREMENT,
-    STATE_CLASS_TOTAL_INCREASING,
+    STATE_CLASS_TOTAL,
     SensorEntity,
 )
 from homeassistant.config_entries import ConfigEntry
@@ -75,10 +75,17 @@ class AccumulatedConsumption(IDeEntity, SensorEntity):
     I_DE_ENTITY_NAME = "Accumulated Consumption"
     I_DE_DATA_SETS = [DataSetType.MEASURE]
 
+    # TOTAL vs TOTAL_INCREASING:
+    # https://developers.home-assistant.io/docs/core/entity/sensor/#how-to-choose-state_class-and-last_reset
+    #
+    # It's recommended to use state class total without last_reset whenever possible,
+    # state class total_increasing or total with last_reset should only be used when
+    # state class total without last_reset does not work for the sensor.
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self._attr_device_class = DEVICE_CLASS_ENERGY
-        self._attr_state_class = STATE_CLASS_TOTAL_INCREASING
+        self._attr_state_class = STATE_CLASS_TOTAL
         self._attr_unit_of_measurement = ENERGY_KILO_WATT_HOUR
 
     @property

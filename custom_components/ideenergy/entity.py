@@ -81,12 +81,7 @@ class IDeEntity(CoordinatorEntity):
 
     async def async_added_to_hass(self) -> None:
         await super().async_added_to_hass()
-        _LOGGER.debug(
-            f"New sensor ready: "
-            f"unique_id={self.unique_id}, "
-            f"entity_id={self.entity_id}, "
-            f"name={self.name} "
-        )
+
         self.coordinator.register_sensor(self)
         await self.coordinator.async_request_refresh()
 
