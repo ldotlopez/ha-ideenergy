@@ -124,23 +124,20 @@ class HistoricalSensor:
         dated_states = [x for x in dated_states if x is not None]
         dated_states = list(sorted(dated_states, key=lambda x: x.when))
 
-        _LOGGER.debug(f"Got {len(dated_states)} measures from sensor")
+        _LOGGER.debug(
+            f"{self.entity_id}: {len(dated_states)} historical states available"
+        )
 
         if not dated_states:
-            _LOGGER.debug("Nothing to write")
             return
 
         fn = functools.partial(self._save_states_into_recorder, dated_states)
         self._get_recorder_instance().async_add_executor_job(fn)
 
-        _LOGGER.debug("Added job executor to save states")
-
     def _get_recorder_instance(self):
         return recorder.get_instance(self.hass)
 
     def _save_states_into_recorder(self, dated_states):
-        _LOGGER.debug("Writing states on recorder")
-
         #
         # Cleanup invalid states in database
         #
@@ -150,7 +147,6 @@ class HistoricalSensor:
             try:
                 self._delete_invalid_states(session)
                 session.commit()
-                _LOGGER.debug("Recoder database clean.")
 
             except sqlalchemy.exc.IntegrityError:
                 session.rollback()
@@ -193,18 +189,18 @@ class HistoricalSensor:
                 # Fix TZINFO from database
                 cutoff = latest_db_state.last_updated.replace(tzinfo=timezone.utc)
                 _LOGGER.debug(
-                    "Found previous states in db, latest is dated at "
-                    f"{cutoff} ({latest_db_state.state})"
+                    f"{self.entity_id}: found previous states in db "
+                    f"(latest is dated at: {cutoff}, value:{latest_db_state.state})"
                 )
                 dated_states = [x for x in dated_states if x.when > cutoff]
 
             if not dated_states:
-                _LOGGER.debug("No new states detected")
+                _LOGGER.debug(f"{self.entity_id}: no new states")
                 return
 
-            _LOGGER.debug(f"About to write {len(dated_states)} states to database")
             _LOGGER.debug(
-                f"Extending from {dated_states[0].when} to {dated_states[-1].when}"
+                f"{self.entity_id}: {len(dated_states)} states pass the cutoff, "
+                f"extending from {dated_states[0].when} to {dated_states[-1].when}"
             )
 
             #
@@ -243,7 +239,7 @@ class HistoricalSensor:
             session.add_all(db_states)
             session.commit()
 
-            _LOGGER.debug(f"Added {len(db_states)} to database")
+            _LOGGER.debug(f"{self.entity_id}: {len(db_states)} saved into the database")
 
     def _delete_invalid_states(self, session: sqlalchemy.orm.session.Session):
         states = (
@@ -256,6 +252,7 @@ class HistoricalSensor:
                 )
             )
         )
+        n_states = states.count()
 
         # Deleting StateAttributes raises IntegrityError :shrug:
         # states_attrs = session.query(rec_db_schema.StateAttributes).filter(
@@ -266,6 +263,9 @@ class HistoricalSensor:
         # states_attrs.delete()
 
         states.delete()
+
+        if n_states:
+            _LOGGER.debug(f"{self.entity_id}: deleted {n_states} invalid states")
 
         ##
         # Strategy: delete orphan StateAttributes

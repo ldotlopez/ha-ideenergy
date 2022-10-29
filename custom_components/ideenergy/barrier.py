@@ -239,40 +239,34 @@ class TimeWindowBarrier(Barrier):
             self._failures = 0
 
         if self._force_next:
-            _LOGGER.debug("Execution allowed: forced")
+            _LOGGER.debug("forced flag is set")
             return
 
         if now < self._cooldown:
-            _LOGGER.debug(
-                "Execution denied: cooldown barrier is active "
-                f"({dt_util.as_local(self._cooldown)})"
-            )
+            cooldown_until = dt_util.as_local(self._cooldown)
             raise BarrierDeniedError(
                 code=TimeWindowBarrierDenyError.COOLDOWN,
-                reason="barrier is in cooldown stage",
+                reason=f"barrier is in cooldown state until {cooldown_until}",
             )
 
         if self._failures > 0 and self._failures < self._max_retries:
-            _LOGGER.debug("Execution allowed: retrying")
+            _LOGGER.debug("barrier is in retrying state")
             return
 
         if not update_window_is_open:
-            _LOGGER.debug("Execution denied: update window is closed")
             raise BarrierDeniedError(
                 code=TimeWindowBarrierDenyError.UPDATE_WINDOW_CLOSED,
                 reason="update window is closed",
             )
 
         if last_success_age <= min_age:
-            _LOGGER.debug(
-                "Execution denied: last success is too recent "
+            reason = (
+                "last success is too recent "
                 f"({last_success_age} seconds, min: {min_age} seconds)"
             )
             raise BarrierDeniedError(
-                code=TimeWindowBarrierDenyError.NO_DELTA, reason="no delta"
+                code=TimeWindowBarrierDenyError.NO_DELTA, reason=reason
             )
-
-        _LOGGER.debug("Execution allowed: no blockers")
 
     def force_next(self):
         self._force_next = True
@@ -285,22 +279,22 @@ class TimeWindowBarrier(Barrier):
         self._failures = 0
         self._last_success = now
 
-        _LOGGER.debug("Success registered")
+        _LOGGER.debug("success registered")
 
     @check_tzinfo("now", optional=True)
     def fail(self, now=None):
         now = now or self.utcnow()
 
         self._failures = self._failures + 1
-        _LOGGER.debug(f"Fail registered ({self._failures}/{self._max_retries})")
+        _LOGGER.debug(f"fail registered ({self._failures}/{self._max_retries})")
 
         if self._failures >= self._max_retries:
             self._force_next = False
             self._cooldown = now + (self._max_age / 2)
 
+            cooldown_until = dt_util.as_local(self._cooldown)
             _LOGGER.debug(
-                "Max failures reached, setup cooldown barrier until "
-                f"{dt_util.as_local(self._cooldown)}"
+                f"max failures reached, setup cooldown barrier until {cooldown_until}"
             )
 
 

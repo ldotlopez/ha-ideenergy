@@ -152,8 +152,10 @@ class IDeCoordinator(DataUpdateCoordinator):
                 continue
 
             except BarrierDeniedError as deny:
-                _LOGGER.debug(f"{dataset.name} not allowed to run: {deny.reason}")
+                _LOGGER.debug(f"{dataset.name} update denied: {deny.reason}")
                 continue
+
+            _LOGGER.debug(f"{dataset.name} update allowed")
 
             # API calls and handle exceptions
             try:
@@ -174,7 +176,7 @@ class IDeCoordinator(DataUpdateCoordinator):
                     continue
 
             except UnicodeDecodeError:
-                _LOGGER.debug(f"{dataset.name} error: " f"invalid encoding. File a bug")
+                _LOGGER.debug(f"{dataset.name} error: invalid encoding. File a bug")
                 continue
 
             except ideenergy.RequestFailedError as e:

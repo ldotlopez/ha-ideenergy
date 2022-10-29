@@ -18,8 +18,10 @@
 # USA.
 
 
+import functools
 import logging
 
+from homeassistant.components import recorder
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import device_registry, entity_registry
@@ -27,7 +29,6 @@ from homeassistant.helpers.entity import DeviceInfo
 
 from .entity import _build_entity_entity_id, _build_entity_unique_id
 from .sensor import AccumulatedConsumption, HistoricalConsumption
-from homeassistant.components import recorder
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -36,28 +37,21 @@ def update_integration(
     hass: HomeAssistant, config_entry: ConfigEntry, device_info: DeviceInfo
 ) -> None:
     if config_entry.version < 2:
-        _update_config_entry_v1(hass, config_entry)
-        _update_device_registry_v1(hass, config_entry, device_info)
         _update_entity_registry_v1(hass, config_entry, device_info)
+        _update_device_registry_v1(hass, config_entry, device_info)
+        _update_config_entry_v1(hass, config_entry)
 
-        v2_data = dict(config_entry.data)
-        name = v2_data.pop("name")
-
-        config_entry.version = 2
-        config_entry.title = name.lstrip("ICP_")
-
-        hass.config_entries.async_update_entry(config_entry, data=v2_data)
-
-        _LOGGER.debug(
-            f"Updated ConfigEntry to '{config_entry.version}'"
-            f" with {config_entry.data!r}"
-        )
+        _LOGGER.debug("Update to version 2 completed")
 
 
 def _update_config_entry_v1(hass: HomeAssistant, config_entry: ConfigEntry):
-    if "name" in config_entry.data:
+    new_data = dict(config_entry.data)
+    new_data.pop("name")
 
-        _LOGGER.debug(f"Updated ConfigEntry '{config_entry.entry_id}'")
+    config_entry.version = 2
+
+    hass.config_entries.async_update_entry(config_entry, data=new_data)
+    _LOGGER.debug(f"ConfigEntry updated to version '{config_entry.version}'")
 
 
 def _update_device_registry_v1(
@@ -75,8 +69,9 @@ def _update_device_registry_v1(
 
         old_ids = dev.identifiers
         new_ids = device_info["identifiers"]
+
         dr.async_update_device(dev.id, new_identifiers=new_ids)
-        _LOGGER.debug(f"Updated DeviceEntry '{dev.id}' ({old_ids} → {new_ids})")
+        _LOGGER.debug(f"DeviceEntry '{dev.id}' updated ({old_ids} → {new_ids})")
 
 
 def _update_entity_registry_v1(
@@ -103,15 +98,18 @@ def _update_entity_registry_v1(
         if not entity:
             continue
 
+        # lambda x: _update_database_v1(hass, entity.entity_id, new_entity_id)
+
         old_unique_id = entity.unique_id
         new_unique_id = _build_entity_unique_id(
             config_entry, device_info, new_sensor_cls
         )
 
-        # new_entity_id = _build_entity_entity_id(
-        #     config_entry, device_info, new_sensor_cls
-        # )
+        new_entity_id = _build_entity_entity_id(
+            config_entry, device_info, new_sensor_cls
+        )
 
+        old_name = getattr(entity, "name")
         new_name = new_sensor_cls.I_DE_ENTITY_NAME
 
         er.async_update_entity(
@@ -121,8 +119,15 @@ def _update_entity_registry_v1(
             original_name=new_name,
         )
         _LOGGER.debug(
-            f"Updated Entity '{entity_id}' ({old_unique_id}' → '{new_unique_id}')"
+            f"Entity '{entity_id}' updated"
+            f" (unique_id {old_unique_id}' → '{new_unique_id}')"
+            f" (name '{old_name}' → '{new_name}')"
         )
+
+        # fn = functools.partial(
+        #     _update_database_v1, hass, entity.entity_id, new_entity_id
+        # )
+        # recorder.get_instance(hass).async_add_executor_job(fn)
 
 
 def _update_database_v1(hass, old_entity_id, new_entity_id):
@@ -133,11 +138,14 @@ def _update_database_v1(hass, old_entity_id, new_entity_id):
             recorder.db_schema.States.entity_id == old_entity_id
         ).update({recorder.db_schema.States.entity_id: new_entity_id})
 
-        session.query(recorder.db_schema.StatisticMetaData).filter(
-            recorder.db_schema.StatisticMetaData.statistic_id == old_entity_id
-        ).update({recorder.db_schema.StatisticMetaData.statistic_id: new_entity_id})
+        session.query(recorder.db_schema.StatisticsMeta).filter(
+            recorder.db_schema.StatisticsMeta.statistic_id == old_entity_id
+        ).update({recorder.db_schema.StatisticsMeta.statistic_id: new_entity_id})
 
         session.commit()
+        _LOGGER.debug(
+            f"Database records updated for '{old_entity_id}' → '{new_entity_id}'"
+        )
 
 
 def _build_entity_unique_id_v1(config_entry: ConfigEntry, sensor_type: str):
