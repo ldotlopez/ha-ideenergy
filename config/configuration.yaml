@@ -7,3 +7,4 @@ logger:
     custom_components.ideenergy.datacoordinator: debug
     custom_components.ideenergy.sensor: debug
     custom_components.ideenergy.historical_state: debug
+    custom_components.ideenergy.updates: debug
