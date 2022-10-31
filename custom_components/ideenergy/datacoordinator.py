@@ -82,6 +82,7 @@ class IDeCoordinator(DataUpdateCoordinator):
             f"{api.username}/{api._contract} coordinator" if api else "i-de coordinator"
         )
         super().__init__(hass, _LOGGER, name=name, update_interval=update_interval)
+
         self.api = api
         self.barriers = barriers
         self.platforms = []  # type: ignore[var-annotated]
@@ -97,6 +98,12 @@ class IDeCoordinator(DataUpdateCoordinator):
     def unregister_sensor(self, sensor: IDeEntity) -> None:
         self.sensors.remove(sensor)
         _LOGGER.debug(f"Unregistered sensor {sensor.__class__}")
+
+    def update_internal_data(self, data: Dict[str, Any]):
+        if self.data is None:  # type: ignore[has-type]
+            self.data = _DEFAULT_COORDINATOR_DATA
+
+        self.data.update(data)
 
     async def _async_update_data(self):
         """Fetch data from API endpoint.

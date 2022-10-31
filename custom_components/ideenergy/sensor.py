@@ -23,20 +23,28 @@
 # from homeassistant.core import callback
 
 
+# Check sensor.SensorEntityDescription
+# https://github.com/home-assistant/core/blob/dev/homeassistant/components/sensor/__init__.py
+
+
 import logging
 from typing import Dict, List, Optional
 
 from homeassistant.components.sensor import (
-    ATTR_STATE_CLASS,
-    STATE_CLASS_MEASUREMENT,
-    STATE_CLASS_TOTAL,
+    SensorDeviceClass,
     SensorEntity,
+    SensorStateClass,
 )
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import DEVICE_CLASS_ENERGY, ENERGY_KILO_WATT_HOUR
+from homeassistant.const import (  # ENERGY_KILO_WATT_HOUR will be deprecated in near future, use; UnitOfEnergy.KILO_WATT_HOUR
+    ENERGY_KILO_WATT_HOUR,
+    STATE_UNKNOWN,
+    STATE_UNAVAILABLE,
+)
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.typing import DiscoveryInfoType
+from homeassistant.helpers.restore_state import RestoreEntity
 from homeassistant.util import dt as dt_util
 
 from .const import DOMAIN
@@ -70,23 +78,23 @@ _LOGGER = logging.getLogger(__name__)
 #     available
 
 
-class AccumulatedConsumption(IDeEntity, SensorEntity):
+class AccumulatedConsumption(RestoreEntity, IDeEntity, SensorEntity):
     I_DE_PLATFORM = PLATFORM
     I_DE_ENTITY_NAME = "Accumulated Consumption"
     I_DE_DATA_SETS = [DataSetType.MEASURE]
 
     # TOTAL vs TOTAL_INCREASING:
-    # https://developers.home-assistant.io/docs/core/entity/sensor/#how-to-choose-state_class-and-last_reset
     #
     # It's recommended to use state class total without last_reset whenever possible,
     # state class total_increasing or total with last_reset should only be used when
     # state class total without last_reset does not work for the sensor.
+    # https://developers.home-assistant.io/docs/core/entity/sensor/#how-to-choose-state_class-and-last_reset
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self._attr_device_class = DEVICE_CLASS_ENERGY
-        self._attr_state_class = STATE_CLASS_TOTAL
-        self._attr_unit_of_measurement = ENERGY_KILO_WATT_HOUR
+        self._attr_device_class = SensorDeviceClass.ENERGY
+        self._attr_state_class = SensorStateClass.TOTAL
+        self._attr_native_unit_of_measurement = ENERGY_KILO_WATT_HOUR
 
     @property
     def extra_state_attributes(self):
@@ -97,7 +105,6 @@ class AccumulatedConsumption(IDeEntity, SensorEntity):
         )
 
         return {
-            ATTR_STATE_CLASS: self.state_class,
             ATTR_LAST_POWER_READING: last_power_reading,
         }
 
@@ -112,6 +119,39 @@ class AccumulatedConsumption(IDeEntity, SensorEntity):
     def _handle_coordinator_update(self) -> None:
         self.async_write_ha_state()
 
+    async def async_added_to_hass(self) -> None:
+        await super().async_added_to_hass()
+
+        saved_data = await self.async_get_last_state()
+        self.coordinator.update_internal_data(saved_data)
+
+    async def async_get_last_state(self):
+        # Try to load previous state using RestoreEntity
+        #
+        # self.async_get_last_state().last_update is tricky and can't be trusted in our
+        # scenario. last_updated can be the last time HA exited because state is saved
+        # at exit with last_updated=exit_time, not last_updated=sensor_last_update
+        #
+        # It's easier to just load the value and schedule an update with
+        # schedule_update_ha_state() (which is meant for push sensors but...)
+
+        state = await super().async_get_last_state()
+
+        try:
+            ret = {
+                DATA_ATTR_MEASURE_ACCUMULATED: float(state.state),
+                DATA_ATTR_MEASURE_INSTANT: float(
+                    state.attributes[ATTR_LAST_POWER_READING]
+                ),
+            }
+            _LOGGER.debug(f"restore state: restored as {ret}")
+            return ret
+
+        except (AttributeError, TypeError, ValueError):
+            _LOGGER.debug(f"restore state: discard state {state!r}")
+
+        return {}
+
 
 class HistoricalConsumption(HistoricalSensor, IDeEntity, SensorEntity):
     I_DE_PLATFORM = PLATFORM
@@ -120,13 +160,10 @@ class HistoricalConsumption(HistoricalSensor, IDeEntity, SensorEntity):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self._attr_device_class = DEVICE_CLASS_ENERGY
-        self._attr_state_class = STATE_CLASS_MEASUREMENT
-        self._attr_unit_of_measurement = ENERGY_KILO_WATT_HOUR
+        self._attr_device_class = SensorDeviceClass.ENERGY
+        self._attr_state_class = SensorStateClass.MEASUREMENT
+        self._attr_native_unit_of_measurement = ENERGY_KILO_WATT_HOUR
         self._attr_entity_registry_enabled_default = False
-        self._attr_extra_state_attributes = {
-            ATTR_STATE_CLASS: self.state_class,
-        }
         self._attr_state = None
 
     @property
@@ -149,13 +186,10 @@ class HistoricalGeneration(HistoricalSensor, IDeEntity, SensorEntity):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self._attr_device_class = DEVICE_CLASS_ENERGY
-        self._attr_state_class = STATE_CLASS_MEASUREMENT
-        self._attr_unit_of_measurement = ENERGY_KILO_WATT_HOUR
+        self._attr_device_class = SensorDeviceClass.ENERGY
+        self._attr_state_class = SensorStateClass.MEASUREMENT
+        self._attr_native_unit_of_measurement = ENERGY_KILO_WATT_HOUR
         self._attr_entity_registry_enabled_default = False
-        self._attr_extra_state_attributes = {
-            ATTR_STATE_CLASS: self.state_class,
-        }
         self._attr_state = None
 
     @property
@@ -181,13 +215,10 @@ class HistoricalPowerDemand(HistoricalSensor, IDeEntity, SensorEntity):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self._attr_device_class = DEVICE_CLASS_ENERGY
-        self._attr_state_class = STATE_CLASS_MEASUREMENT
-        self._attr_unit_of_measurement = ENERGY_KILO_WATT_HOUR
+        self._attr_device_class = SensorDeviceClass.ENERGY
+        self._attr_state_class = SensorStateClass.MEASUREMENT
+        self._attr_native_unit_of_measurement = ENERGY_KILO_WATT_HOUR
         self._attr_entity_registry_enabled_default = False
-        self._attr_extra_state_attributes = {
-            ATTR_STATE_CLASS: self.state_class,
-        }
         self._attr_state = None
 
     @property
