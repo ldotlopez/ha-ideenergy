@@ -57,6 +57,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         contract_details = await api.get_contract_details()
     except ideenergy.client.ClientError as e:
         _LOGGER.debug(f"Unable to initialize integration: {e}")
+        return False
 
     device_info = IDeEnergyDeviceInfo(contract_details)
 

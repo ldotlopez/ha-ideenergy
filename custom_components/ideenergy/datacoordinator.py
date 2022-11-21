@@ -194,6 +194,10 @@ class IDeCoordinator(DataUpdateCoordinator):
                 )
                 continue
 
+            except ideenergy.CommandError as e:
+                _LOGGER.debug(f"{dataset.name} command error from API ({e!r})")
+                continue
+
             except Exception as e:
                 _LOGGER.debug(f"**FIXME**: handle {dataset.name} exception: {e!r}")
                 continue
