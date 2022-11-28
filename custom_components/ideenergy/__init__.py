@@ -153,6 +153,7 @@ async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry):
         contract_details = await api.get_contract_details()
     except ideenergy.client.ClientError as e:
         _LOGGER.debug(f"Unable to initialize integration: {e}")
+        return False
 
     update_integration(hass, entry, IDeEnergyDeviceInfo(contract_details))
     return True
