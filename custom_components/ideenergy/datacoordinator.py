@@ -21,7 +21,7 @@
 import enum
 import logging
 from datetime import datetime, timedelta, timezone
-from typing import Any, Dict
+from typing import Any, Dict, Optional, Union
 
 import ideenergy
 from homeassistant.helpers.update_coordinator import (
@@ -136,7 +136,7 @@ class IDeCoordinator(DataUpdateCoordinator):
         return data
 
     async def _async_update_data_raw(
-        self, datasets: DataSetType = DataSetType.ALL, now: datetime = None
+        self, datasets: DataSetType = DataSetType.ALL, now: Optional[datetime] = None
     ) -> Dict[str, Any]:
         now = now or dt_util.utcnow()
         if now.tzinfo != timezone.utc:
@@ -212,7 +212,7 @@ class IDeCoordinator(DataUpdateCoordinator):
 
         return data
 
-    async def get_direct_reading_data(self) -> Dict[str, int | float]:
+    async def get_direct_reading_data(self) -> Dict[str, Union[int, float]]:
         data = await self.api.get_measure()
 
         return {

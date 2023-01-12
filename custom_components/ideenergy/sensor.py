@@ -260,7 +260,9 @@ async def async_setup_entry(
     async_add_devices(sensors)
 
 
-def _historical_data_to_date_states(data: List[Dict] | None) -> List[DatedState]:
+def _historical_data_to_date_states(
+    data: Optional[List[Dict]] = None,
+) -> List[DatedState]:
     def _convert_item(item):
         return DatedState(
             state=item["value"] / 1000,

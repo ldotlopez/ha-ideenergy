@@ -24,7 +24,7 @@ import functools
 import logging
 from abc import abstractmethod
 from datetime import timedelta
-from typing import Any, Tuple
+from typing import Any, Optional, Tuple, Union
 
 from homeassistant.util import dt as dt_util
 
@@ -46,7 +46,7 @@ DEFAULT_MAX_RETRIES = 3
 
 
 def check_tzinfo(
-    param: str | int, default_tzinfo=datetime.timezone.utc, optional=False
+    param: Union[str, int], default_tzinfo=datetime.timezone.utc, optional=False
 ):
     def decorator(fn):
         @functools.wraps(fn)
@@ -87,15 +87,15 @@ def check_tzinfo(
 
 class Barrier:
     @abstractmethod
-    def check(self, **kwargs: Any | None):
+    def check(self, **kwargs: Any):
         raise NotImplementedError()
 
     @abstractmethod
-    def success(self, **kwargs: Any | None):
+    def success(self, **kwargs: Any):
         raise NotImplementedError()
 
     @abstractmethod
-    def fail(self, **kwargs: Any | None):
+    def fail(self, **kwargs: Any):
         raise NotImplementedError()
 
     @abstractmethod
@@ -116,7 +116,9 @@ class BarrierDeniedError(BarrierException):
 class TimeDeltaBarrier(Barrier):
     @check_tzinfo("last_success", optional=True)
     def __init__(
-        self, delta: datetime.timedelta, last_success: datetime.datetime | None = None
+        self,
+        delta: datetime.timedelta,
+        last_success: Optional[datetime.datetime] = None,
     ):
         self._delta = delta
         self._last_success = last_success or dt_util.utc_from_timestamp(0)
