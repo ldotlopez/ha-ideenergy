@@ -57,7 +57,7 @@ from .datacoordinator import (
     DataSetType,
 )
 from .entity import IDeEntity
-from .historical_sensor import DatedState, HistoricalSensor
+from homeassistant_historical_sensor import DatedState, HistoricalSensor
 
 ATTR_LAST_POWER_READING = "Last Power Reading"
 PLATFORM = "sensor"
@@ -178,6 +178,9 @@ class HistoricalConsumption(HistoricalSensor, IDeEntity, SensorEntity):
     def _handle_coordinator_update(self) -> None:
         self.async_write_ha_historical_states()
 
+    def async_update_historical(self) -> None:
+        pass
+
 
 class HistoricalGeneration(HistoricalSensor, IDeEntity, SensorEntity):
     I_DE_PLATFORM = PLATFORM
@@ -207,6 +210,9 @@ class HistoricalGeneration(HistoricalSensor, IDeEntity, SensorEntity):
     def _handle_coordinator_update(self) -> None:
         self.async_write_ha_historical_states()
 
+    def async_update_historical(self) -> None:
+        pass
+
 
 class HistoricalPowerDemand(HistoricalSensor, IDeEntity, SensorEntity):
     I_DE_PLATFORM = PLATFORM
@@ -235,6 +241,9 @@ class HistoricalPowerDemand(HistoricalSensor, IDeEntity, SensorEntity):
     def _handle_coordinator_update(self) -> None:
         self.async_write_ha_historical_states()
 
+    def async_update_historical(self) -> None:
+        pass
+
 
 async def async_setup_entry(
     hass: HomeAssistant,
@@ -243,6 +252,7 @@ async def async_setup_entry(
     discovery_info: Optional[DiscoveryInfoType] = None,  # noqa DiscoveryInfoType | None
 ):
     coordinator, device_info = hass.data[DOMAIN][config_entry.entry_id]
+
     sensors = [
         AccumulatedConsumption(
             config_entry=config_entry, device_info=device_info, coordinator=coordinator

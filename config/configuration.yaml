@@ -6,5 +6,5 @@ logger:
     ideenergy: warning
     custom_components.ideenergy.datacoordinator: debug
     custom_components.ideenergy.sensor: debug
-    custom_components.ideenergy.historical_sensor: debug
     custom_components.ideenergy.updates: debug
+    homeassistant_historical_sensor: debug
