@@ -30,7 +30,7 @@ from homeassistant.data_entry_flow import FlowResult
 from homeassistant.helpers.aiohttp_client import async_create_clientsession
 
 from . import _LOGGER
-from .const import CONF_CONTRACT, DOMAIN
+from .const import CONF_CONTRACT, DOMAIN, CONFIG_ENTRY_VERSION
 
 AUTH_SCHEMA = vol.Schema(
     {
@@ -41,7 +41,7 @@ AUTH_SCHEMA = vol.Schema(
 
 
 class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):  # type: ignore[call-arg]
-    VERSION = 2
+    VERSION = CONFIG_ENTRY_VERSION
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)

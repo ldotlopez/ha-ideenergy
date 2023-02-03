@@ -39,3 +39,4 @@ DATA_ATTR_HISTORICAL_GENERATION = "historical_generation"
 DATA_ATTR_HISTORICAL_POWER_DEMAND = "historical_power_demand"
 
 HISTORICAL_PERIOD_LENGHT = timedelta(days=7)
+CONFIG_ENTRY_VERSION = 3

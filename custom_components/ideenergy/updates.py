@@ -18,19 +18,26 @@
 # USA.
 
 
-import functools
 import logging
+from typing import Type
 
-from homeassistant.components import recorder
+from custom_components.ideenergy.const import DOMAIN
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import device_registry, entity_registry
 from homeassistant.helpers.entity import DeviceInfo
+from homeassistant.util import slugify
 
-from .entity import _build_entity_entity_id, _build_entity_unique_id
+from .entity import (
+    _build_entity_entity_id as _build_entity_entity_id_v3,
+    _build_entity_unique_id as _build_entity_unique_id_v3,
+    IDeEntity,
+)
 from .sensor import AccumulatedConsumption, HistoricalConsumption
 
 _LOGGER = logging.getLogger(__name__)
+
+SensorType = Type["IDeEntity"]
 
 
 def update_integration(
@@ -42,6 +49,66 @@ def update_integration(
         _update_config_entry_v1(hass, config_entry)
 
         _LOGGER.debug("Update to version 2 completed")
+
+    if config_entry.version < 3:
+        _update_config_v2(hass, config_entry, device_info)
+
+        _LOGGER.debug("Update to version 3 completed")
+
+
+def _update_config_v2(
+    hass: HomeAssistant, config_entry: ConfigEntry, device_info: DeviceInfo
+) -> None:
+    dr = device_registry.async_get(hass)
+    er = entity_registry.async_get(hass)
+
+    device = dr.async_get_device(device_info["identifiers"])
+    entities = {id: e for id, e in er.entities.items() if e.device_id == device.id}
+
+    for _, entity in entities.items():
+        old_unique_id = entity.unique_id
+        new_unique_id = _build_entity_unique_id_v3(
+            device_info, entity.name or entity.original_name
+        )
+
+        er.async_update_entity(
+            entity.entity_id,
+            new_unique_id=new_unique_id,
+        )
+        _LOGGER.debug(f"Updated entity '{entity.entity_id}'")
+        _LOGGER.debug(f"  [-] unique_id '{old_unique_id}'")
+        _LOGGER.debug(f"  [+] unique_id '{new_unique_id}'")
+
+    config_entry.version = 3
+
+    hass.config_entries.async_update_entry(config_entry)
+    _LOGGER.debug(f"ConfigEntry updated to version '{config_entry.version}'")
+
+
+def _build_entity_unique_id_v2(
+    config_entry: ConfigEntry,
+    device_info: DeviceInfo,
+    SensorClass: SensorType,
+) -> str:
+    cups = dict(device_info["identifiers"])["cups"]
+
+    return slugify(SensorClass.I_DE_ENTITY_NAME).replace("_", "-")
+
+
+def _build_entity_entity_id_v2(
+    config_entry: ConfigEntry,
+    device_info: DeviceInfo,
+    SensorClass: SensorType,
+) -> str:
+    cups = dict(device_info["identifiers"])["cups"]
+    base_id = slugify(f"{DOMAIN}" + f"_{cups}" + f"_{SensorClass.I_DE_ENTITY_NAME}")
+
+    return f"{SensorClass.I_DE_PLATFORM}.{base_id}".lower()
+
+
+#
+# Don't modify anything below this line unless it's critical
+#
 
 
 def _update_config_entry_v1(hass: HomeAssistant, config_entry: ConfigEntry):
@@ -73,6 +140,10 @@ def _update_device_registry_v1(
         dr.async_update_device(dev.id, new_identifiers=new_ids)
         _LOGGER.debug(f"DeviceEntry '{dev.id}' updated ({old_ids} → {new_ids})")
 
+        _LOGGER.debug(f"Updated device '{dev.id}'")
+        _LOGGER.debug(f"  [-] identifiers '{old_ids}'")
+        _LOGGER.debug(f"  [+] identifiers '{new_ids}'")
+
 
 def _update_entity_registry_v1(
     hass: HomeAssistant,
@@ -98,14 +169,12 @@ def _update_entity_registry_v1(
         if not entity:
             continue
 
-        # lambda x: _update_database_v1(hass, entity.entity_id, new_entity_id)
-
         old_unique_id = entity.unique_id
-        new_unique_id = _build_entity_unique_id(
+        new_unique_id = _build_entity_unique_id_v2(
             config_entry, device_info, new_sensor_cls
         )
 
-        new_entity_id = _build_entity_entity_id(
+        new_entity_id = _build_entity_entity_id_v2(
             config_entry, device_info, new_sensor_cls
         )
 
@@ -118,34 +187,12 @@ def _update_entity_registry_v1(
             # new_entity_id=new_entity_id,
             original_name=new_name,
         )
-        _LOGGER.debug(
-            f"Entity '{entity_id}' updated"
-            f" (unique_id {old_unique_id}' → '{new_unique_id}')"
-            f" (name '{old_name}' → '{new_name}')"
-        )
 
-        # fn = functools.partial(
-        #     _update_database_v1, hass, entity.entity_id, new_entity_id
-        # )
-        # recorder.get_instance(hass).async_add_executor_job(fn)
-
-
-def _update_database_v1(hass, old_entity_id, new_entity_id):
-    with recorder.util.session_scope(
-        session=recorder.get_instance(hass).get_session()
-    ) as session:
-        session.query(recorder.db_schema.States).filter(
-            recorder.db_schema.States.entity_id == old_entity_id
-        ).update({recorder.db_schema.States.entity_id: new_entity_id})
-
-        session.query(recorder.db_schema.StatisticsMeta).filter(
-            recorder.db_schema.StatisticsMeta.statistic_id == old_entity_id
-        ).update({recorder.db_schema.StatisticsMeta.statistic_id: new_entity_id})
-
-        session.commit()
-        _LOGGER.debug(
-            f"Database records updated for '{old_entity_id}' → '{new_entity_id}'"
-        )
+        _LOGGER.debug(f"Updated entity '{entity_id}'")
+        _LOGGER.debug(f"  [-] unique_id '{old_unique_id}'")
+        _LOGGER.debug(f"  [-] name      '{old_name}'")
+        _LOGGER.debug(f"  [+] unique_id '{new_unique_id}'")
+        _LOGGER.debug(f"  [+] name      '{new_name}'")
 
 
 def _build_entity_unique_id_v1(config_entry: ConfigEntry, sensor_type: str):
