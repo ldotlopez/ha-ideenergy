@@ -55,7 +55,7 @@ PLATFORMS: list[str] = ["sensor"]
 _LOGGER = logging.getLogger(__name__)
 
 if not (MAJOR_VERSION >= 2023 and MINOR_VERSION >= 2):
-    msg = "Required homeassistant version >=2023.2.1"
+    msg = "Required homeassistant version >=2023.2.0"
     _LOGGER.debug(msg)
     raise SystemError(msg)
 
