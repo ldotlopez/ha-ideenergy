@@ -28,7 +28,10 @@ from typing import Any, Dict
 import sqlalchemy.exc
 from homeassistant.components import recorder
 from homeassistant.components.recorder import db_schema as rec_db_schema
-from homeassistant.const import STATE_UNAVAILABLE, STATE_UNKNOWN
+from homeassistant.const import (
+    STATE_UNAVAILABLE,
+    STATE_UNKNOWN,
+)
 from homeassistant.helpers.entity import Entity
 from homeassistant.helpers.event import async_track_time_interval
 from homeassistant.util import dt as dt_util
@@ -139,69 +142,61 @@ class HistoricalSensor:
 
     def _save_states_into_recorder(self, dated_states):
         #
-        # Cleanup invalid states in database
+        # 2023.2.1 Introduces last_updated_ts, last_changed_ts columns
         #
+
         with recorder.util.session_scope(
             session=self._get_recorder_instance().get_session()
         ) as session:
+            base_qs = session.query(rec_db_schema.States).filter(
+                rec_db_schema.States.entity_id == self.entity_id
+            )
+
+            #
+            # Delete invalid states
+            #
             try:
-                self._delete_invalid_states(session)
+                states = base_qs.filter(
+                    or_(
+                        rec_db_schema.States.state == STATE_UNKNOWN,
+                        rec_db_schema.States.state == STATE_UNAVAILABLE,
+                    )
+                )
+                state_count = states.count()
+                states.delete()
                 session.commit()
+
+                _LOGGER.debug(f"Deleted {state_count} invalid states")
 
             except sqlalchemy.exc.IntegrityError:
                 session.rollback()
                 _LOGGER.debug("Warning: Current recorder schema is not supported")
                 _LOGGER.debug(
                     "Invalid states can't be deleted from recorder."
-                    "This is not critical just unsightly for some graphs "
+                    + "This is not critical just unsightly for some graphs "
                 )
 
-        #
-        # Write states to recorder
-        #
-        with recorder.util.session_scope(
-            session=self._get_recorder_instance().get_session()
-        ) as session:
+            #
+            # Delete intersecting states
+            #
+            cutoff = dt_util.as_timestamp(dated_states[0].when)
+            intersect_states = base_qs.filter(
+                rec_db_schema.States.last_updated_ts >= cutoff
+            )
+            intersect_count = intersect_states.count()
+            intersect_states.delete()
+            session.commit()
+
+            _LOGGER.debug(
+                f"Deleted {intersect_count} states after {dated_states[0].when}"
+            )
+
             #
             # Check latest state in the database
             #
-            latest_db_state = (
-                session.query(rec_db_schema.States)
-                .filter(rec_db_schema.States.entity_id == self.entity_id)
-                .filter(
-                    not_(
-                        or_(
-                            rec_db_schema.States.state == "unknown",
-                            rec_db_schema.States.state == "unavailable",
-                        )
-                    )
-                )
-                .order_by(rec_db_schema.States.last_updated.desc())
-                .first()
-            )
-            # first_run = latest_db_state is None
-
-            #
-            # Drop historical states older than lastest db state
-            #
-            dated_states = list(sorted(dated_states, key=lambda x: x.when))
-            if latest_db_state:
-                # Fix TZINFO from database
-                cutoff = latest_db_state.last_updated.replace(tzinfo=timezone.utc)
-                _LOGGER.debug(
-                    f"{self.entity_id}: found previous states in db "
-                    f"(latest is dated at: {cutoff}, value:{latest_db_state.state})"
-                )
-                dated_states = [x for x in dated_states if x.when > cutoff]
-
-            if not dated_states:
-                _LOGGER.debug(f"{self.entity_id}: no new states")
-                return
-
-            _LOGGER.debug(
-                f"{self.entity_id}: {len(dated_states)} states pass the cutoff, "
-                f"extending from {dated_states[0].when} to {dated_states[-1].when}"
-            )
+            latest_state = base_qs.order_by(
+                rec_db_schema.States.last_updated.desc()
+            ).first()
 
             #
             # Build recorder State, StateAttributes and Event
@@ -225,73 +220,22 @@ class HistoricalSensor:
                     hash=attrs_hash, shared_attrs=attrs_as_str
                 )
 
+                when_as_ts = dt_util.as_timestamp(dt_st.when)
                 state = rec_db_schema.States(
                     entity_id=self.entity_id,
-                    last_changed=dt_st.when,
-                    last_updated=dt_st.when,
-                    old_state=db_states[idx - 1] if idx else latest_db_state,
+                    last_changed_ts=when_as_ts,
+                    last_updated_ts=when_as_ts,
+                    old_state=db_states[idx - 1] if idx else latest_state,
                     state=_stringify_state(self, dt_st.state),
                     state_attributes=state_attributes,
                 )
-                _LOGGER.debug(f" => {state.state} @ {state.last_changed}")
+                _LOGGER.debug(f" => {state.state} @ {dt_st.when}")
                 db_states.append(state)
 
             session.add_all(db_states)
             session.commit()
 
             _LOGGER.debug(f"{self.entity_id}: {len(db_states)} saved into the database")
-
-    def _delete_invalid_states(self, session: sqlalchemy.orm.session.Session):
-        states = (
-            session.query(rec_db_schema.States)
-            .filter(rec_db_schema.States.entity_id == self.entity_id)
-            .filter(
-                or_(
-                    rec_db_schema.States.state == STATE_UNKNOWN,
-                    rec_db_schema.States.state == STATE_UNAVAILABLE,
-                )
-            )
-        )
-        n_states = states.count()
-
-        # Deleting StateAttributes raises IntegrityError :shrug:
-        # states_attrs = session.query(rec_db_schema.StateAttributes).filter(
-        #     rec_db_schema.StateAttributes.attributes_id.in_(
-        #         (x.attributes_id for x in states)
-        #     )
-        # )
-        # states_attrs.delete()
-
-        states.delete()
-
-        if n_states:
-            _LOGGER.debug(f"{self.entity_id}: deleted {n_states} invalid states")
-
-        ##
-        # Strategy: delete orphan StateAttributes
-        # This implementation is broken, we can end deleting states from other
-        # integrations
-        ##
-
-        # attr_ids_from_states = (
-        #     x.attributes_id
-        #     for x in session.query(rec_db_schema.States)
-        # )
-
-        # attrs_ids_from_state_attrs = (
-        #     x.attributes_id
-        #     for x in session.query(rec_db_schema.StateAttributes)
-        # )
-
-        # orphan_attr_ids = set(attrs_ids_from_state_attrs) - set(attr_ids_from_states)
-
-        # session.query(rec_db_schema.StateAttributes).filter(
-        #     rec_db_schema.StateAttributes.attributes_id.in_(orphan_attr_ids)
-        # ).delete()
-
-        ##
-        # End strategy: delete orphan StateAttributes
-        ##
 
 
 class CustomUpdateEntity(Entity):

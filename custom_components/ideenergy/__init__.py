@@ -25,7 +25,12 @@ from datetime import timedelta
 
 import ideenergy
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import CONF_PASSWORD, CONF_USERNAME
+from homeassistant.const import (
+    CONF_PASSWORD,
+    CONF_USERNAME,
+    MAJOR_VERSION,
+    MINOR_VERSION,
+)
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryNotReady
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
@@ -48,6 +53,11 @@ from .updates import update_integration
 PLATFORMS: list[str] = ["sensor"]
 
 _LOGGER = logging.getLogger(__name__)
+
+if not (MAJOR_VERSION >= 2023 and MINOR_VERSION >= 3):
+    msg = "Required homeassistant version >=2023.2.1"
+    _LOGGER.debug(msg)
+    raise SystemError(msg)
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
