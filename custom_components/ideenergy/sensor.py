@@ -38,6 +38,7 @@ from homeassistant.components.sensor import (
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import (  # ENERGY_KILO_WATT_HOUR will be deprecated in near future, use; UnitOfEnergy.KILO_WATT_HOUR
     ENERGY_KILO_WATT_HOUR,
+    POWER_WATT,
     STATE_UNKNOWN,
     STATE_UNAVAILABLE,
 )
@@ -97,18 +98,6 @@ class AccumulatedConsumption(RestoreEntity, IDeEntity, SensorEntity):
         self._attr_native_unit_of_measurement = ENERGY_KILO_WATT_HOUR
 
     @property
-    def extra_state_attributes(self):
-        last_power_reading = (
-            self.coordinator.data[DATA_ATTR_MEASURE_INSTANT]
-            if self.coordinator.data
-            else None
-        )
-
-        return {
-            ATTR_LAST_POWER_READING: last_power_reading,
-        }
-
-    @property
     def state(self):
         if self.coordinator.data is None:
             return None
@@ -140,9 +129,6 @@ class AccumulatedConsumption(RestoreEntity, IDeEntity, SensorEntity):
         try:
             ret = {
                 DATA_ATTR_MEASURE_ACCUMULATED: float(state.state),
-                DATA_ATTR_MEASURE_INSTANT: float(
-                    state.attributes[ATTR_LAST_POWER_READING]
-                ),
             }
             _LOGGER.debug(f"restore state: restored as {ret}")
             return ret
@@ -152,6 +138,49 @@ class AccumulatedConsumption(RestoreEntity, IDeEntity, SensorEntity):
 
         return {}
 
+class InstantConsumption(RestoreEntity, IDeEntity, SensorEntity):
+    I_DE_PLATFORM = PLATFORM
+    I_DE_ENTITY_NAME = "Instant Consumption"
+    I_DE_DATA_SETS = [DataSetType.MEASURE]
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._attr_device_class = SensorDeviceClass.POWER
+        self._attr_state_class = SensorStateClass.MEASUREMENT
+        self._attr_native_unit_of_measurement = POWER_WATT
+
+    @property
+    def state(self):
+        if self.coordinator.data is None:
+            return None
+
+        return self.coordinator.data[DATA_ATTR_MEASURE_INSTANT]
+
+    @callback
+    def _handle_coordinator_update(self) -> None:
+        self.async_write_ha_state()
+
+    async def async_added_to_hass(self) -> None:
+        await super().async_added_to_hass()
+
+        saved_data = await self.async_get_last_state()
+        self.coordinator.update_internal_data(saved_data)
+
+    async def async_get_last_state(self):
+
+        state = await super().async_get_last_state()
+
+        try:
+            ret = {
+                DATA_ATTR_MEASURE_INSTANT: int(state.state),
+            }
+            _LOGGER.debug(f"restore state: restored as {ret}")
+            return ret
+
+        except (AttributeError, TypeError, ValueError):
+            _LOGGER.debug(f"restore state: discard state {state!r}")
+
+        return {}
 
 class HistoricalConsumption(HistoricalSensor, IDeEntity, SensorEntity):
     I_DE_PLATFORM = PLATFORM
@@ -245,6 +274,9 @@ async def async_setup_entry(
     coordinator, device_info = hass.data[DOMAIN][config_entry.entry_id]
     sensors = [
         AccumulatedConsumption(
+            config_entry=config_entry, device_info=device_info, coordinator=coordinator
+        ),
+        InstantConsumption(
             config_entry=config_entry, device_info=device_info, coordinator=coordinator
         ),
         HistoricalConsumption(
