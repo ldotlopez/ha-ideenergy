@@ -65,7 +65,6 @@ class IDeEntity(CoordinatorEntity):
             config_entry, device_info, self.__class__
         )
 
-        self._attr_state_class = STATE_CLASS_MEASUREMENT
         self._attr_device_info = device_info
         self._attr_entity_registry_enabled_default = True
         self._attr_entity_registry_visible_default = True

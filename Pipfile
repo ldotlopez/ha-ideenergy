@@ -6,7 +6,8 @@ name = "pypi"
 [packages]
 
 [dev-packages]
-homeassistant = "*"
+homeassistant_historical_sensor = "0.0.2-dev2"
+homeassistant = ">=2023.2.0"
 ipython = "*"
 ipdb = "*"
 

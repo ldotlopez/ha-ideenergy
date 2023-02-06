@@ -189,8 +189,8 @@ class IDeCoordinator(DataUpdateCoordinator):
             except ideenergy.RequestFailedError as e:
                 _LOGGER.debug(
                     f"{dataset.name} error: "
-                    f"{e.response.url} {e.response.reason} ({e.response.status})"
-                    f"{e}"
+                    + f"{e.response.url} {e.response.reason} ({e.response.status})"
+                    + f"{e}"
                 )
                 continue
 

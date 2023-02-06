@@ -28,24 +28,24 @@
 
 
 import logging
+from datetime import timedelta
 from typing import Dict, List, Optional
 
+from homeassistant.components.recorder.models import StatisticData, StatisticMetaData
+from homeassistant.components.recorder.statistics import get_last_statistics
 from homeassistant.components.sensor import (
     SensorDeviceClass,
     SensorEntity,
     SensorStateClass,
 )
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import (  # ENERGY_KILO_WATT_HOUR will be deprecated in near future, use; UnitOfEnergy.KILO_WATT_HOUR
-    ENERGY_KILO_WATT_HOUR,
-    STATE_UNKNOWN,
-    STATE_UNAVAILABLE,
-)
+from homeassistant.const import STATE_UNAVAILABLE, STATE_UNKNOWN, UnitOfEnergy
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
-from homeassistant.helpers.typing import DiscoveryInfoType
 from homeassistant.helpers.restore_state import RestoreEntity
+from homeassistant.helpers.typing import DiscoveryInfoType
 from homeassistant.util import dt as dt_util
+from homeassistant_historical_sensor import DatedState, HistoricalSensor
 
 from .const import DOMAIN
 from .datacoordinator import (
@@ -57,7 +57,6 @@ from .datacoordinator import (
     DataSetType,
 )
 from .entity import IDeEntity
-from homeassistant_historical_sensor import DatedState, HistoricalSensor
 
 ATTR_LAST_POWER_READING = "Last Power Reading"
 PLATFORM = "sensor"
@@ -78,6 +77,54 @@ _LOGGER = logging.getLogger(__name__)
 #     available
 
 
+class HistoricalSensorMixin(HistoricalSensor):
+    @callback
+    def _handle_coordinator_update(self) -> None:
+        self.hass.add_job(self.async_write_ha_historical_states())
+
+    def async_update_historical(self) -> None:
+        pass
+
+
+class StatisticsMixin:
+    def get_statatistics_metadata(self) -> StatisticMetaData:
+        meta = super().get_statatistics_metadata()
+        meta["has_sum"] = True
+        return meta
+
+    async def async_calculate_statistic_data(
+        self, dated_states: List[DatedState]
+    ) -> List[StatisticData]:
+        metadata = self.get_statatistics_metadata()
+
+        res = await self._get_recorder_instance().async_add_executor_job(
+            get_last_statistics,
+            self.hass,
+            1,
+            metadata["statistic_id"],
+            True,
+            set(["last_reset", "max", "mean", "min", "state", "sum"]),
+        )
+        if res:
+            last_stat = res[metadata["statistic_id"]][0]
+            accumulated = last_stat["sum"] or 0
+            dated_states = [x for x in dated_states if x.when >= last_stat["end"]]
+
+        else:
+            accumulated = 0
+
+        def calculate_statistics_from_accumulated(accumulated):
+            for x in dated_states:
+                accumulated = accumulated + x.state
+                # Shift start by 1 hour since DatedState.when represents the
+                # end of the period
+                yield StatisticData(
+                    start=x.when - timedelta(hours=1), state=x.state, sum=accumulated
+                )
+
+        return list(calculate_statistics_from_accumulated(accumulated))
+
+
 class AccumulatedConsumption(RestoreEntity, IDeEntity, SensorEntity):
     I_DE_PLATFORM = PLATFORM
     I_DE_ENTITY_NAME = "Accumulated Consumption"
@@ -94,7 +141,7 @@ class AccumulatedConsumption(RestoreEntity, IDeEntity, SensorEntity):
         super().__init__(*args, **kwargs)
         self._attr_device_class = SensorDeviceClass.ENERGY
         self._attr_state_class = SensorStateClass.TOTAL
-        self._attr_native_unit_of_measurement = ENERGY_KILO_WATT_HOUR
+        self._attr_native_unit_of_measurement = UnitOfEnergy.KILO_WATT_HOUR
 
     @property
     def extra_state_attributes(self):
@@ -153,16 +200,18 @@ class AccumulatedConsumption(RestoreEntity, IDeEntity, SensorEntity):
         return {}
 
 
-class HistoricalConsumption(HistoricalSensor, IDeEntity, SensorEntity):
+class HistoricalConsumption(
+    StatisticsMixin, HistoricalSensorMixin, IDeEntity, SensorEntity
+):
     I_DE_PLATFORM = PLATFORM
     I_DE_ENTITY_NAME = "Historical Consumption"
     I_DE_DATA_SETS = [DataSetType.HISTORICAL_CONSUMPTION]
 
     def __init__(self, *args, **kwargs):
+        # Leave state_class attr undeclared to skip statistics
         super().__init__(*args, **kwargs)
         self._attr_device_class = SensorDeviceClass.ENERGY
-        self._attr_state_class = SensorStateClass.MEASUREMENT
-        self._attr_native_unit_of_measurement = ENERGY_KILO_WATT_HOUR
+        self._attr_native_unit_of_measurement = UnitOfEnergy.KILO_WATT_HOUR
         self._attr_entity_registry_enabled_default = False
         self._attr_state = None
 
@@ -174,24 +223,19 @@ class HistoricalConsumption(HistoricalSensor, IDeEntity, SensorEntity):
 
         return ret
 
-    @callback
-    def _handle_coordinator_update(self) -> None:
-        self.async_write_ha_historical_states()
 
-    def async_update_historical(self) -> None:
-        pass
-
-
-class HistoricalGeneration(HistoricalSensor, IDeEntity, SensorEntity):
+class HistoricalGeneration(
+    StatisticsMixin, HistoricalSensorMixin, IDeEntity, SensorEntity
+):
     I_DE_PLATFORM = PLATFORM
     I_DE_ENTITY_NAME = "Historical Generation"
     I_DE_DATA_SETS = [DataSetType.HISTORICAL_GENERATION]
 
     def __init__(self, *args, **kwargs):
+        # Leave state_class attr undeclared to skip statistics
         super().__init__(*args, **kwargs)
         self._attr_device_class = SensorDeviceClass.ENERGY
-        self._attr_state_class = SensorStateClass.MEASUREMENT
-        self._attr_native_unit_of_measurement = ENERGY_KILO_WATT_HOUR
+        self._attr_native_unit_of_measurement = UnitOfEnergy.KILO_WATT_HOUR
         self._attr_entity_registry_enabled_default = False
         self._attr_state = None
 
@@ -203,27 +247,19 @@ class HistoricalGeneration(HistoricalSensor, IDeEntity, SensorEntity):
 
         return ret
 
-    # async def async_update_historical_states(self):
-    #     pass
 
-    @callback
-    def _handle_coordinator_update(self) -> None:
-        self.async_write_ha_historical_states()
-
-    def async_update_historical(self) -> None:
-        pass
-
-
-class HistoricalPowerDemand(HistoricalSensor, IDeEntity, SensorEntity):
+class HistoricalPowerDemand(
+    StatisticsMixin, HistoricalSensorMixin, IDeEntity, SensorEntity
+):
     I_DE_PLATFORM = PLATFORM
     I_DE_ENTITY_NAME = "Historical Power Demand"
     I_DE_DATA_SETS = [DataSetType.HISTORICAL_POWER_DEMAND]
 
     def __init__(self, *args, **kwargs):
+        # Leave state_class attr undeclared to skip statistics
         super().__init__(*args, **kwargs)
         self._attr_device_class = SensorDeviceClass.ENERGY
-        self._attr_state_class = SensorStateClass.MEASUREMENT
-        self._attr_native_unit_of_measurement = ENERGY_KILO_WATT_HOUR
+        self._attr_native_unit_of_measurement = UnitOfEnergy.KILO_WATT_HOUR
         self._attr_entity_registry_enabled_default = False
         self._attr_state = None
 
