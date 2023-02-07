@@ -6,7 +6,7 @@ name = "pypi"
 [packages]
 
 [dev-packages]
-homeassistant = "*"
+homeassistant = ">= 2023.2.1"
 ipython = "*"
 ipdb = "*"
 
