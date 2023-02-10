@@ -8,8 +8,10 @@ assignees: ''
 ---
 
 Before filling a bug please provide as much as information as possible.
-
 Not all information is required but the more the better.
+
+Stick to English if bug is about code, Spanish is OK if bug is about configuration.
+
 
 **Describe the bug**
 A clear and concise description of what the bug is.
@@ -26,7 +28,7 @@ Steps to reproduce the behavior:
 - ideenergy integration version [e.g 1.0.0, main]
 - Instalation method [HassOS, docker, pip, pipenv]
 - i-de.es advanced user [yes / no]
-- Have I read the [FAQ](https://github.com/ldotlopez/ha-ideenergy/FAQ.md)?: no
+- Did I read the [FAQ](https://github.com/ldotlopez/ha-ideenergy/blob/main/FAQ.md)?: no
 
 **Expected behavior**
 A clear and concise description of what you expected to happen.
