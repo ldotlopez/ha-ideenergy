@@ -1,0 +1,35 @@
+# FAQ
+
+## Q. Why "X" doesn't work
+
+A. Most features in this integration are experimental. If it's not listed as supported it's **not** supported. Double-check this.
+
+
+## Q. Accumulated (or instant) consumption sensor is in an unknown state or doesn't show any data.
+
+A. Those two sensors read data directly from your service point. The i-de API for this data is **very** unreliable, > 50% of the calls fail. We try out best to circumvent this situation but we can't do magic.
+
+Give it some time, two or three days, before filing a bug.
+
+
+## Q. Historical sensors (consumption and generation) doesn't have a value
+
+A. They are not supposed to. Historical sensors are a hack, HomeAssistant is not supposed to have historical sensors.
+
+Historical sensors can't provide the current state, Home Assistant will show "undefined" state forever, it's OK and intentional. To view historical data you have to go [History](https://my.home-assistant.io/redirect/history/) → Select any historical sensor →  Go back some days.
+
+Keep in mind that historical data has a ~24h delay.
+
+Until 1.1.0 those sensors doen't generate statistic data. You need this data to them as an energy source in the energy panel.
+
+Before 1.1.0 you have to use the "Accumulated consumption" sensor as a source for the energy panel.
+
+## Q. I have a problem with multiple contracts: I got banned/Doesn't work
+
+We recommend disabling the "Accumulated" and "Instant" sensors if you have multiple contracts.
+
+Due to some issues with the API and rate limit it's very possible that i-de bans you have a few hours of running this integration.
+
+**Important**: Having multiple contracts it's different of having **configured** multiple contracts. You can have multiple contracts but have only one configured in Home Assistant, or you can have multiple contracts added in HomeAssistant but only one (or none) with mentioned sensors enabled.
+
+If you have multiple contracts I recommend you to only enable historical sensors.

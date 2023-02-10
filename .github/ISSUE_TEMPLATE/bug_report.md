@@ -26,6 +26,7 @@ Steps to reproduce the behavior:
 - ideenergy integration version [e.g 1.0.0, main]
 - Instalation method [HassOS, docker, pip, pipenv]
 - i-de.es advanced user [yes / no]
+- Have I read the [FAQ](https://github.com/ldotlopez/ha-ideenergy/FAQ.md)?: no
 
 **Expected behavior**
 A clear and concise description of what you expected to happen.
