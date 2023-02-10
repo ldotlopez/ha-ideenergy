@@ -7,10 +7,21 @@ A. Most features in this integration are experimental. If it's not listed as sup
 
 ## Q. Accumulated (or instant) consumption sensor is in an unknown state or doesn't show any data.
 
+
+Due to connectivity issues or i-DE server issues, you may not always obtain readings as expected. Keep in mind that sometimes a delay on the reading may occurr.
+
 A. Those two sensors read data directly from your service point. The i-de API for this data is **very** unreliable, > 50% of the calls fail. We try out best to circumvent this situation but we can't do magic.
+
+Also, due to connectivity issues or i-DE server issues, you may not always obtain readings as expected.
 
 Give it some time, two or three days, before filing a bug.
 
+
+## Q. Accumulated (or instant) consumption sensor shows 0 increment at some intervals.
+
+A. Readings from this sensors only returns integer values. If from the last reading your meter indicates a variance minor then 1 kWh, the integration will not reflect any variance and that will only be recorded once the variance from the previous reading is greater then 1.
+
+* The "instant" and "accumulated" readings are done directly to your meter. Due to connectivity issues or i-DE server issues, you may not always obtain readings as expected. Keep in mind that sometimes a delay on the reading may occurr.
 
 ## Q. Historical sensors (consumption and generation) doesn't have a value
 
