@@ -155,6 +155,7 @@ class HistoricalSensor:
             #
             # Delete invalid states
             #
+
             try:
                 states = base_qs.filter(
                     or_(
@@ -177,26 +178,59 @@ class HistoricalSensor:
                 )
 
             #
-            # Delete intersecting states
+            # Delete intersecting states (*)
             #
-            cutoff = dt_util.as_timestamp(dated_states[0].when)
-            intersect_states = base_qs.filter(
-                rec_db_schema.States.last_updated_ts >= cutoff
-            )
-            intersect_count = intersect_states.count()
-            intersect_states.delete()
-            session.commit()
+            # * This approach has been tested several times and always ends up
+            # causing unexpected failures. Sometimes the database schema
+            # changes and sometimes, depending on the engine, integrity
+            # failures appear.
+            # It is better to discard the new overlapping states than to
+            # delete them from the database.
 
-            _LOGGER.debug(
-                f"Deleted {intersect_count} states after {dated_states[0].when}"
-            )
+            # cutoff = dt_util.as_timestamp(dated_states[0].when)
+            # intersect_states = base_qs.filter(
+            #     rec_db_schema.States.last_updated_ts >= cutoff
+            # )
+            # intersect_count = intersect_states.count()
+            # intersect_states.delete()
+            # session.commit()
+            #
+            # _LOGGER.debug(
+            #     f"Deleted {intersect_count} states after {dated_states[0].when}"
+            # )
 
             #
             # Check latest state in the database
             #
-            latest_state = base_qs.order_by(
-                rec_db_schema.States.last_updated.desc()
-            ).first()
+
+            latest_state = (
+                base_qs.filter(
+                    not_(
+                        or_(
+                            rec_db_schema.States.state == STATE_UNAVAILABLE,
+                            rec_db_schema.States.state == STATE_UNKNOWN,
+                        )
+                    )
+                )
+                .order_by(rec_db_schema.States.last_updated_ts.desc())
+                .first()
+            )
+
+            #
+            # Drop historical states older than lastest db state
+            #
+
+            if latest_state:
+                cutoff = dt_util.utc_from_timestamp(latest_state.last_updated_ts)
+                _LOGGER.debug(
+                    f"{self.entity_id}: found previous states in db "
+                    + f"(latest is dated at: {cutoff}, value:{latest_state.state})"
+                )
+                dated_states = [x for x in dated_states if x.when > cutoff]
+
+            if not dated_states:
+                _LOGGER.debug(f"{self.entity_id}: no new states")
+                return
 
             #
             # Build recorder State, StateAttributes and Event
