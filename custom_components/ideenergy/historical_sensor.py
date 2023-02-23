@@ -128,7 +128,7 @@ class HistoricalSensor:
         dated_states = list(sorted(dated_states, key=lambda x: x.when))
 
         _LOGGER.debug(
-            f"{self.entity_id}: {len(dated_states)} historical states available"
+            f"{self.entity_id}: Got {len(dated_states)} historical states from API"
         )
 
         if not dated_states:
@@ -203,18 +203,25 @@ class HistoricalSensor:
             # Check latest state in the database
             #
 
-            latest_state = (
-                base_qs.filter(
-                    not_(
-                        or_(
-                            rec_db_schema.States.state == STATE_UNAVAILABLE,
-                            rec_db_schema.States.state == STATE_UNKNOWN,
+            try:
+                latest_state = (
+                    base_qs.filter(
+                        not_(
+                            or_(
+                                rec_db_schema.States.state == STATE_UNAVAILABLE,
+                                rec_db_schema.States.state == STATE_UNKNOWN,
+                            )
                         )
                     )
+                    .order_by(rec_db_schema.States.last_updated_ts.desc())
+                    .first()
                 )
-                .order_by(rec_db_schema.States.last_updated_ts.desc())
-                .first()
-            )
+            except sqlalchemy.exc.DatabaseError:
+                _LOGGER.debug(
+                    "Error: Current recorder schema is not supported. "
+                    + "This error is fatal, please file a bug"
+                )
+                return
 
             #
             # Drop historical states older than lastest db state
@@ -223,13 +230,14 @@ class HistoricalSensor:
             if latest_state:
                 cutoff = dt_util.utc_from_timestamp(latest_state.last_updated_ts)
                 _LOGGER.debug(
-                    f"{self.entity_id}: found previous states in db "
-                    + f"(latest is dated at: {cutoff}, value:{latest_state.state})"
+                    f"{self.entity_id}: lastest state found: {latest_state.state} @ {cutoff}"
                 )
                 dated_states = [x for x in dated_states if x.when > cutoff]
+            else:
+                _LOGGER.debug(f"{self.entity_id}: no previous states found")
 
             if not dated_states:
-                _LOGGER.debug(f"{self.entity_id}: no new states")
+                _LOGGER.debug(f"{self.entity_id}: no new states from API")
                 return
 
             #
