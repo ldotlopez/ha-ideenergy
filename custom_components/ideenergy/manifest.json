@@ -1,16 +1,13 @@
 {
   "domain": "ideenergy",
   "name": "i-DE Energy Monitor",
+  "codeowners": ["@ldotlopez"],
   "config_flow": true,
-  "documentation": "https://github.com/ldotlopez/ha-ideenergy",
-  "issue_tracker": "https://github.com/ldotlopez/ha-ideenergy/issues",
-  "requirements": [
-    "ideenergy==1.0.0rc2"
-  ],
   "dependencies": ["recorder"],
-  "codeowners": [
-    "@ldotlopez"
-  ],
+  "documentation": "https://github.com/ldotlopez/ha-ideenergy",
+  "integration_type": "device",
   "iot_class": "cloud_polling",
+  "issue_tracker": "https://github.com/ldotlopez/ha-ideenergy/issues",
+  "requirements": ["ideenergy==1.0.0rc2"],
   "version": "1.0.4"
 }
