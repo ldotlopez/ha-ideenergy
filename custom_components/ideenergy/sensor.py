@@ -32,20 +32,24 @@ from datetime import timedelta
 from typing import Dict, List, Optional
 
 from homeassistant.components.recorder.models import StatisticData, StatisticMetaData
-from homeassistant.components.recorder.statistics import get_last_statistics
 from homeassistant.components.sensor import (
     SensorDeviceClass,
     SensorEntity,
     SensorStateClass,
 )
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import STATE_UNAVAILABLE, STATE_UNKNOWN, UnitOfEnergy
+from homeassistant.const import (
+    STATE_UNAVAILABLE,
+    STATE_UNKNOWN,
+    UnitOfEnergy,
+    UnitOfPower,
+)
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.restore_state import RestoreEntity
 from homeassistant.helpers.typing import DiscoveryInfoType
-from homeassistant.util import dt as dt_util
-from homeassistant_historical_sensor import DatedState, HistoricalSensor
+from homeassistant.util import dt as dtutil
+from homeassistant_historical_sensor import HistoricalSensor, HistoricalState
 
 from .const import DOMAIN
 from .datacoordinator import (
@@ -60,6 +64,8 @@ from .entity import IDeEntity
 
 ATTR_LAST_POWER_READING = "Last Power Reading"
 PLATFORM = "sensor"
+
+MAINLAND_SPAIN_ZONEINFO = dtutil.zoneinfo.ZoneInfo("Europe/Madrid")
 _LOGGER = logging.getLogger(__name__)
 
 
@@ -93,33 +99,23 @@ class StatisticsMixin:
         return meta
 
     async def async_calculate_statistic_data(
-        self, dated_states: List[DatedState]
+        self, hist_states: List[HistoricalState], *, latest: Optional[dict]
     ) -> List[StatisticData]:
-        metadata = self.get_statatistics_metadata()
 
-        res = await self._get_recorder_instance().async_add_executor_job(
-            get_last_statistics,
-            self.hass,
-            1,
-            metadata["statistic_id"],
-            True,
-            set(["last_reset", "max", "mean", "min", "state", "sum"]),
-        )
-        if res:
-            last_stat = res[metadata["statistic_id"]][0]
-            accumulated = last_stat["sum"] or 0
-            dated_states = [x for x in dated_states if x.when >= last_stat["end"]]
+        if latest:
+            accumulated = latest["sum"] or 0
+            hist_states = [x for x in hist_states if x.when >= latest["end"]]
 
         else:
             accumulated = 0
 
         def calculate_statistics_from_accumulated(accumulated):
-            for x in dated_states:
+            for x in hist_states:
                 accumulated = accumulated + x.state
                 # Shift start by 1 hour since DatedState.when represents the
                 # end of the period
                 yield StatisticData(
-                    start=x.when - timedelta(hours=1), state=x.state, sum=accumulated
+                    start=x.dt - timedelta(hours=1), state=x.state, sum=accumulated
                 )
 
         return list(calculate_statistics_from_accumulated(accumulated))
@@ -208,7 +204,6 @@ class HistoricalConsumption(
     I_DE_DATA_SETS = [DataSetType.HISTORICAL_CONSUMPTION]
 
     def __init__(self, *args, **kwargs):
-        # Leave state_class attr undeclared to skip statistics
         super().__init__(*args, **kwargs)
         self._attr_device_class = SensorDeviceClass.ENERGY
         self._attr_native_unit_of_measurement = UnitOfEnergy.KILO_WATT_HOUR
@@ -217,7 +212,7 @@ class HistoricalConsumption(
 
     @property
     def historical_states(self):
-        ret = _historical_data_to_date_states(
+        ret = historical_states_from_historical_api_data(
             self.coordinator.data[DATA_ATTR_HISTORICAL_CONSUMPTION]["historical"]
         )
 
@@ -232,7 +227,6 @@ class HistoricalGeneration(
     I_DE_DATA_SETS = [DataSetType.HISTORICAL_GENERATION]
 
     def __init__(self, *args, **kwargs):
-        # Leave state_class attr undeclared to skip statistics
         super().__init__(*args, **kwargs)
         self._attr_device_class = SensorDeviceClass.ENERGY
         self._attr_native_unit_of_measurement = UnitOfEnergy.KILO_WATT_HOUR
@@ -241,44 +235,45 @@ class HistoricalGeneration(
 
     @property
     def historical_states(self):
-        ret = _historical_data_to_date_states(
+        ret = historical_states_from_historical_api_data(
             self.coordinator.data[DATA_ATTR_HISTORICAL_GENERATION]["historical"]
         )
 
         return ret
 
 
-class HistoricalPowerDemand(
-    StatisticsMixin, HistoricalSensorMixin, IDeEntity, SensorEntity
-):
+class HistoricalPowerDemand(HistoricalSensorMixin, IDeEntity, SensorEntity):
     I_DE_PLATFORM = PLATFORM
     I_DE_ENTITY_NAME = "Historical Power Demand"
     I_DE_DATA_SETS = [DataSetType.HISTORICAL_POWER_DEMAND]
 
     def __init__(self, *args, **kwargs):
-        # Leave state_class attr undeclared to skip statistics
         super().__init__(*args, **kwargs)
-        self._attr_device_class = SensorDeviceClass.ENERGY
-        self._attr_native_unit_of_measurement = UnitOfEnergy.KILO_WATT_HOUR
+        self._attr_device_class = SensorDeviceClass.POWER
+        self._attr_native_unit_of_measurement = UnitOfPower.WATT
         self._attr_entity_registry_enabled_default = False
         self._attr_state = None
+        self._attr_statistics_enabled = False
 
     @property
     def historical_states(self):
+        def _convert_item(item):
+            # [
+            #     {
+            #         "dt": datetime.datetime(2021, 4, 24, 13, 0),
+            #         "value": 3012.0
+            #     },
+            #     ...
+            # ]
+            return HistoricalState(
+                state=item["value"] / 1000,
+                dt=item["dt"].replace(tzinfo=MAINLAND_SPAIN_ZONEINFO),
+            )
+
         data = self.coordinator.data[DATA_ATTR_HISTORICAL_POWER_DEMAND]
-        ret = [DatedState(when=item["dt"], state=item["value"]) for item in data]
+        ret = [_convert_item(item) for item in data]
 
         return ret
-
-    # async def async_update_historical_states(self):
-    #     pass
-
-    @callback
-    def _handle_coordinator_update(self) -> None:
-        self.async_write_ha_historical_states()
-
-    def async_update_historical(self) -> None:
-        pass
 
 
 async def async_setup_entry(
@@ -306,14 +301,18 @@ async def async_setup_entry(
     async_add_devices(sensors)
 
 
-def _historical_data_to_date_states(
+def historical_states_from_historical_api_data(
     data: Optional[List[Dict]] = None,
-) -> List[DatedState]:
+) -> List[HistoricalState]:
     def _convert_item(item):
-        return DatedState(
+        # FIXME: What about canary islands?
+        dt = item["end"].replace(tzinfo=MAINLAND_SPAIN_ZONEINFO)
+        last_reset = item["start"].replace(tzinfo=MAINLAND_SPAIN_ZONEINFO)
+
+        return HistoricalState(
             state=item["value"] / 1000,
-            when=dt_util.as_utc(item["end"]),
-            attributes={"last_reset": dt_util.as_utc(item["start"])},
+            dt=dt,
+            attributes={"last_reset": last_reset},
         )
 
     return [_convert_item(item) for item in data or []]
