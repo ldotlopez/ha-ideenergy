@@ -103,8 +103,9 @@ class StatisticsMixin:
     ) -> List[StatisticData]:
 
         if latest:
+            cutoff = dtutil.utc_from_timestamp(latest["end"])
             accumulated = latest["sum"] or 0
-            hist_states = [x for x in hist_states if x.when >= latest["end"]]
+            hist_states = [x for x in hist_states if x.dt >= cutoff]
 
         else:
             accumulated = 0
