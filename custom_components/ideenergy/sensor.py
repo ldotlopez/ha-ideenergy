@@ -29,7 +29,7 @@
 
 import logging
 from datetime import timedelta
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Union
 
 from homeassistant.components.recorder.models import StatisticData, StatisticMetaData
 from homeassistant.components.sensor import (
@@ -49,7 +49,10 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.restore_state import RestoreEntity
 from homeassistant.helpers.typing import DiscoveryInfoType
 from homeassistant.util import dt as dtutil
-from homeassistant_historical_sensor import HistoricalSensor, HistoricalState
+from homeassistant_historical_sensor import (
+    HistoricalSensor,
+    HistoricalState,
+)
 
 from .const import DOMAIN
 from .datacoordinator import (
@@ -92,16 +95,19 @@ class HistoricalSensorMixin(HistoricalSensor):
         pass
 
 
-class StatisticsMixin:
-    def get_statatistics_metadata(self) -> StatisticMetaData:
-        meta = super().get_statatistics_metadata()
+class StatisticsMixin(HistoricalSensor):
+    @property
+    def statatistic_id(self):
+        return self.entity_id
+
+    def get_statatistic_metadata(self) -> StatisticMetaData:
+        meta = super().get_statatistic_metadata()
         meta["has_sum"] = True
         return meta
 
     async def async_calculate_statistic_data(
         self, hist_states: List[HistoricalState], *, latest: Optional[dict]
-    ) -> List[StatisticData]:
-
+    ) -> Union[List[StatisticData]]:
         if latest:
             cutoff = dtutil.utc_from_timestamp(latest["end"])
             accumulated = latest["sum"] or 0

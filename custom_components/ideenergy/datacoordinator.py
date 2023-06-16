@@ -88,9 +88,6 @@ class IDeCoordinator(DataUpdateCoordinator):
         self.platforms = []  # type: ignore[var-annotated]
         self.sensors = []  # type: ignore[var-annotated]
 
-    def utcnow(self):
-        return dt_util.utcnow()
-
     def register_sensor(self, sensor: IDeEntity) -> None:
         self.sensors.append(sensor)
         _LOGGER.debug(f"Registered sensor {sensor.__class__}")

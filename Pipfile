@@ -6,9 +6,10 @@ name = "pypi"
 [packages]
 
 [dev-packages]
-homeassistant = ">= 2023.2.1"
+homeassistant = ">= 2023.6.1"
 ipython = "*"
 ipdb = "*"
+homeassistant-historical-sensor = {editable = true, path = "./../ha-historical-sensor"}
 
 [requires]
 python_version = "3"
