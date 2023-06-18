@@ -107,10 +107,10 @@ class StatisticsMixin(HistoricalSensor):
 
     async def async_calculate_statistic_data(
         self, hist_states: List[HistoricalState], *, latest: Optional[dict]
-    ) -> Union[List[StatisticData]]:
+    ) -> List[StatisticData]:
         if latest:
-            cutoff = dtutil.utc_from_timestamp(latest["end"])
-            accumulated = latest["sum"] or 0
+            cutoff = dtutil.utc_from_timestamp(latest.get("end") or 0)
+            accumulated = latest.get("sum") or 0
             hist_states = [x for x in hist_states if x.dt >= cutoff]
 
         else:
