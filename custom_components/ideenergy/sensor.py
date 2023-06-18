@@ -185,7 +185,7 @@ class AccumulatedConsumption(RestoreEntity, IDeEntity, SensorEntity):
             _LOGGER.debug(f"restore state: restored as {ret}")
             return ret
 
-        except (AttributeError, TypeError, ValueError):
+        except (AttributeError, KeyError, TypeError, ValueError):
             _LOGGER.debug(f"restore state: discard state {state!r}")
 
         return {}
