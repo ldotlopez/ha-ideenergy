@@ -245,6 +245,7 @@ class HistoricalConsumption(
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self._attr_device_class = SensorDeviceClass.ENERGY
+        self._attr_state_class = SensorStateClass.MEASUREMENT
         self._attr_native_unit_of_measurement = UnitOfEnergy.KILO_WATT_HOUR
         self._attr_entity_registry_enabled_default = False
         self._attr_state = None
