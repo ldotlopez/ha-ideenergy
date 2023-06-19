@@ -90,11 +90,11 @@ class IDeCoordinator(DataUpdateCoordinator):
 
     def register_sensor(self, sensor: IDeEntity) -> None:
         self.sensors.append(sensor)
-        _LOGGER.debug(f"Registered sensor {sensor.__class__}")
+        _LOGGER.debug(f"Registered sensor '{sensor.__class__.__name__}'")
 
     def unregister_sensor(self, sensor: IDeEntity) -> None:
+        _LOGGER.debug(f"Unregistered sensor '{sensor.__class__.__name__}'")
         self.sensors.remove(sensor)
-        _LOGGER.debug(f"Unregistered sensor {sensor.__class__}")
 
     def update_internal_data(self, data: Dict[str, Any]):
         if self.data is None:  # type: ignore[has-type]
@@ -124,9 +124,9 @@ class IDeCoordinator(DataUpdateCoordinator):
             for s_ds in sensor.I_DE_DATA_SETS:
                 ds = ds | s_ds
 
-        _LOGGER.debug(f"Updating data set: {ds!r}")
+        dsstr = ds.name.replace("|", ", ")
+        _LOGGER.debug(f"Request update for datasets: {dsstr}")
 
-        # updated_data = {}
         updated_data = await self._async_update_data_raw(datasets=ds)
 
         data = (self.data or _DEFAULT_COORDINATOR_DATA) | updated_data
@@ -152,14 +152,14 @@ class IDeCoordinator(DataUpdateCoordinator):
                 self.barriers[dataset].check()
 
             except KeyError:
-                _LOGGER.debug(f"{dataset.name} ignored: no barrier defined")
+                _LOGGER.debug(f"update ignored for {dataset.name}: no barrier defined")
                 continue
 
             except BarrierDeniedError as deny:
-                _LOGGER.debug(f"{dataset.name} update denied: {deny.reason}")
+                _LOGGER.debug(f"update denied for {dataset.name}: {deny.reason}")
                 continue
 
-            _LOGGER.debug(f"{dataset.name} update allowed")
+            _LOGGER.debug(f"update allowed for {dataset.name}")
 
             # API calls and handle exceptions
             try:
@@ -176,32 +176,40 @@ class IDeCoordinator(DataUpdateCoordinator):
                     data.update(await self.get_historical_power_demand_data())
 
                 else:
-                    _LOGGER.debug(f"{dataset.name} not implemented yet")
+                    _LOGGER.debug(
+                        f"update ignored for {dataset.name}: not implemented yet"
+                    )
                     continue
 
             except UnicodeDecodeError:
-                _LOGGER.debug(f"{dataset.name} error: invalid encoding. File a bug")
+                _LOGGER.debug(
+                    f"update error for {dataset.name}: invalid encoding. File a bug"
+                )
                 continue
 
             except ideenergy.RequestFailedError as e:
                 _LOGGER.debug(
-                    f"{dataset.name} error: "
-                    + f"{e.response.url} {e.response.reason} ({e.response.status})"
-                    + f"{e}"
+                    f"update error for {dataset.name}: "
+                    + f"{e.response.reason} ({e.response.status})"
                 )
                 continue
 
             except ideenergy.CommandError as e:
-                _LOGGER.debug(f"{dataset.name} command error from API ({e!r})")
+                _LOGGER.debug(
+                    f"update error for {dataset.name}: command error from API ({e!r})"
+                )
                 continue
 
             except Exception as e:
-                _LOGGER.debug(f"**FIXME**: handle {dataset.name} exception: {e!r}")
+                _LOGGER.debug(
+                    f"update error for {dataset.name}: "
+                    f"**FIXME** handle {dataset.name} raised exception: {e!r}"
+                )
                 continue
 
             self.barriers[dataset].success()
 
-            _LOGGER.debug(f"{dataset.name} successfully updated")
+            _LOGGER.debug(f"update successful for {dataset.name}")
 
         # delay = random.randint(DELAY_MIN_SECONDS * 10, DELAY_MAX_SECONDS * 10) / 10
         # _LOGGER.debug(f"  → Random delay: {delay} seconds")
