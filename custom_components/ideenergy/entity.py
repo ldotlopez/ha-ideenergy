@@ -25,13 +25,14 @@
 import logging
 from typing import Type
 
-from homeassistant.components.sensor import STATE_CLASS_MEASUREMENT
-from homeassistant.config_entries import ConfigEntry
+from homeassistant.components import recorder
 from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from homeassistant.util import slugify
-
-from .const import DOMAIN
+from homeassistant_historical_sensor.recorderutil import (
+    delete_entity_invalid_states,
+    hass_recorder_session,
+)
 
 SensorType = Type["IDeEntity"]
 
@@ -79,55 +80,28 @@ class IDeEntity(CoordinatorEntity):
         return f"<{clsname} {api.username}/{api._contract}>"
 
     async def async_added_to_hass(self) -> None:
+        n_invalid_states = await self.async_delete_invalid_states()
+        _LOGGER.debug(f"{self.entity_id}: cleaned {n_invalid_states} invalid states")
+
         await super().async_added_to_hass()
 
         self.coordinator.register_sensor(self)
+
         await self.coordinator.async_request_refresh()
 
     async def async_will_remove_from_hass(self) -> None:
         self.coordinator.unregister_sensor(self)
         await super().async_will_remove_from_hass()
 
-    # async def async_added_to_hass(self) -> None:
-    #     # Try to load previous state using RestoreEntity
-    #     #
-    #     # self.async_get_last_state().last_update is tricky and can't be trusted in our
-    #     # scenario. last_updated can be the last time HA exited because state is saved
-    #     # at exit with last_updated=exit_time, not last_updated=sensor_last_update
-    #     #
-    #     # It's easier to just load the value and schedule an update with
-    #     # schedule_update_ha_state() (which is meant for push sensors but...)
+    async def async_delete_invalid_states(self) -> int:
+        if getattr(self, "hass", None) is None:
+            raise TypeError(f"{self.entity_id} is not added to hass")
 
-    #     await super().async_added_to_hass()
+        def fn():
+            with hass_recorder_session(self.hass) as session:
+                return delete_entity_invalid_states(session, self)
 
-    #     state = await self.async_get_last_state()
-
-    #     if (
-    #         not state
-    #         or state.state is None
-    #         or state.state == STATE_UNKNOWN
-    #         or state.state == STATE_UNAVAILABLE
-    #     ):
-    #         self._logger.debug("restore state: No previous state")
-
-    #     else:
-    #         try:
-    #             self._state = float(state.state)
-    #             self._logger.debug(
-    #                 f"restore state: Got {self._state} {ENERGY_KILO_WATT_HOUR}"
-    #             )
-
-    #         except ValueError:
-    #             self._logger.debug(
-    #                 f"restore state: Discard invalid previous state {state!r}"
-    #             )
-
-    #     if self._state is None:
-    #         self._logger.debug(
-    #             "restore state: No previous state: scheduling force update"
-    #         )
-    #         self._barrier.force_next()
-    #         self.schedule_update_ha_state(force_refresh=True)
+        return await recorder.get_instance(self.hass).async_add_executor_job(fn)
 
 
 def _build_entity_unique_id(device_info: DeviceInfo, entity_unique_name: str) -> str:

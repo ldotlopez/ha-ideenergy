@@ -29,7 +29,7 @@
 
 import logging
 from datetime import timedelta
-from typing import Dict, List, Optional, Union
+from typing import Any, Callable, Dict, List, Optional
 
 from homeassistant.components.recorder.models import StatisticData, StatisticMetaData
 from homeassistant.components.sensor import (
@@ -45,14 +45,12 @@ from homeassistant.const import (
     UnitOfPower,
 )
 from homeassistant.core import HomeAssistant, callback
+from homeassistant.helpers.entity import Entity
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.restore_state import RestoreEntity
 from homeassistant.helpers.typing import DiscoveryInfoType
 from homeassistant.util import dt as dtutil
-from homeassistant_historical_sensor import (
-    HistoricalSensor,
-    HistoricalState,
-)
+from homeassistant_historical_sensor import HistoricalSensor, HistoricalState
 
 from .const import DOMAIN
 from .datacoordinator import (
@@ -65,7 +63,6 @@ from .datacoordinator import (
 )
 from .entity import IDeEntity
 
-ATTR_LAST_POWER_READING = "Last Power Reading"
 PLATFORM = "sensor"
 
 MAINLAND_SPAIN_ZONEINFO = dtutil.zoneinfo.ZoneInfo("Europe/Madrid")
@@ -160,35 +157,10 @@ class AccumulatedConsumption(RestoreEntity, IDeEntity, SensorEntity):
     async def async_added_to_hass(self) -> None:
         await super().async_added_to_hass()
 
-        saved_data = await self.async_get_last_state()
-        self.coordinator.update_internal_data(saved_data)
-
-    async def async_get_last_state(self):
-        # Try to load previous state using RestoreEntity
-        #
-        # self.async_get_last_state().last_update is tricky and can't be trusted in our
-        # scenario. last_updated can be the last time HA exited because state is saved
-        # at exit with last_updated=exit_time, not last_updated=sensor_last_update
-        #
-        # It's easier to just load the value and schedule an update with
-        # schedule_update_ha_state() (which is meant for push sensors but...)
-
-        state = await super().async_get_last_state()
-
-        try:
-            ret = {
-                DATA_ATTR_MEASURE_ACCUMULATED: float(state.state),
-                DATA_ATTR_MEASURE_INSTANT: float(
-                    state.attributes[ATTR_LAST_POWER_READING]
-                ),
-            }
-            _LOGGER.debug(f"restore state: restored as {ret}")
-            return ret
-
-        except (AttributeError, KeyError, TypeError, ValueError):
-            _LOGGER.debug(f"restore state: discard state {state!r}")
-
-        return {}
+        saved_data = await async_get_last_state_safe(self, float)
+        self.coordinator.update_internal_data(
+            {DATA_ATTR_MEASURE_ACCUMULATED: saved_data}
+        )
 
 
 class InstantPowerDemand(RestoreEntity, IDeEntity, SensorEntity):
@@ -216,23 +188,8 @@ class InstantPowerDemand(RestoreEntity, IDeEntity, SensorEntity):
     async def async_added_to_hass(self) -> None:
         await super().async_added_to_hass()
 
-        saved_data = await self.async_get_last_state()
-        self.coordinator.update_internal_data(saved_data)
-
-    async def async_get_last_state(self):
-        state = await super().async_get_last_state()
-
-        try:
-            ret = {
-                DATA_ATTR_MEASURE_INSTANT: float(state.state),
-            }
-            _LOGGER.debug(f"restore state: restored as {ret}")
-            return ret
-
-        except (AttributeError, TypeError, ValueError):
-            _LOGGER.debug(f"restore state: discard state {state!r}")
-
-        return {}
+        saved_data = await async_get_last_state_safe(self, float)
+        self.coordinator.update_internal_data({DATA_ATTR_MEASURE_INSTANT: saved_data})
 
 
 class HistoricalConsumption(
@@ -269,6 +226,7 @@ class HistoricalGeneration(
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self._attr_device_class = SensorDeviceClass.ENERGY
+        self._attr_state_class = SensorStateClass.MEASUREMENT
         self._attr_native_unit_of_measurement = UnitOfEnergy.KILO_WATT_HOUR
         self._attr_entity_registry_enabled_default = False
         self._attr_state = None
@@ -290,10 +248,10 @@ class HistoricalPowerDemand(HistoricalSensorMixin, IDeEntity, SensorEntity):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self._attr_device_class = SensorDeviceClass.POWER
+        self._attr_state_class = SensorStateClass.MEASUREMENT
         self._attr_native_unit_of_measurement = UnitOfPower.WATT
         self._attr_entity_registry_enabled_default = False
         self._attr_state = None
-        self._attr_statistics_enabled = False
 
     @property
     def historical_states(self):
@@ -359,3 +317,36 @@ def historical_states_from_historical_api_data(
         )
 
     return [_convert_item(item) for item in data or []]
+
+
+async def async_get_last_state_safe(
+    entity: RestoreEntity, convert_fn: Callable[[Any], Any]
+) -> Any:
+    # Try to load previous state using RestoreEntity
+    #
+    # self.async_get_last_state().last_update is tricky and can't be trusted in our
+    # scenario. last_updated can be the last time HA exited because state is saved
+    # at exit with last_updated=exit_time, not last_updated=sensor_last_update
+    #
+    # It's easier to just load the value and schedule an update with
+    # schedule_update_ha_state() (which is meant for push sensors but...)
+
+    state = await entity.async_get_last_state()
+    if state is None:
+        _LOGGER.debug(f"{entity.entity_id}: restore state failed (no state)")
+        return None
+
+    if state.state in [STATE_UNKNOWN, STATE_UNAVAILABLE]:
+        _LOGGER.debug(f"{entity.entity_id}: restore state failed ({state.state})")
+        return None
+
+    try:
+        return convert_fn(state.state)
+
+    except (TypeError, ValueError):
+        sttype = type(state.state)
+        _LOGGER.debug(
+            f"{entity.entity_id}: "
+            f"restore state failed (incompatible. type='{sttype}', value='{state.state!r}')"
+        )
+        return None
