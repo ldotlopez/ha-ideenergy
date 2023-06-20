@@ -45,7 +45,6 @@ from homeassistant.const import (
     UnitOfPower,
 )
 from homeassistant.core import HomeAssistant, callback
-from homeassistant.helpers.entity import Entity
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.restore_state import RestoreEntity
 from homeassistant.helpers.typing import DiscoveryInfoType
@@ -130,29 +129,41 @@ class AccumulatedConsumption(RestoreEntity, IDeEntity, SensorEntity):
     I_DE_ENTITY_NAME = "Accumulated Consumption"
     I_DE_DATA_SETS = [DataSetType.MEASURE]
 
-    # TOTAL vs TOTAL_INCREASING:
-    #
-    # It's recommended to use state class total without last_reset whenever possible,
-    # state class total_increasing or total with last_reset should only be used when
-    # state class total without last_reset does not work for the sensor.
-    # https://developers.home-assistant.io/docs/core/entity/sensor/#how-to-choose-state_class-and-last_reset
-
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self._attr_device_class = SensorDeviceClass.ENERGY
-        self._attr_state_class = SensorStateClass.TOTAL
         self._attr_native_unit_of_measurement = UnitOfEnergy.KILO_WATT_HOUR
+
+        # TOTAL vs TOTAL_INCREASING:
+        #
+        # It's recommended to use state class total without last_reset whenever
+        # possible, state class total_increasing or total with last_reset should only be
+        # used when state class total without last_reset does not work for the sensor.
+        # https://developers.home-assistant.io/docs/core/entity/sensor/#how-to-choose-state_class-and-last_reset
+        self._attr_state_class = SensorStateClass.TOTAL
+
+        # See AccumulatedConsumption._handle_coordinator_update for details about this
+        # attribute
+        self._reported_state = None
 
     @property
     def state(self):
         if self.coordinator.data is None:
             return None
 
-        return self.coordinator.data[DATA_ATTR_MEASURE_ACCUMULATED]
+        self._reported_state = self.coordinator.data[DATA_ATTR_MEASURE_ACCUMULATED]
+        return self._reported_state
 
     @callback
     def _handle_coordinator_update(self) -> None:
-        self.async_write_ha_state()
+        # Having the coordinator updated doesn't mean that our state has changed.
+        # Sometimes (almost of the times) coordinator updated is succesfull but our data
+        # is not updated due to the barrier.
+        #
+        # Using the self._state attribute as shield prevents duplicated states
+
+        if self._reported_state != self.coordinator.data[DATA_ATTR_MEASURE_ACCUMULATED]:
+            self.async_write_ha_state()
 
     async def async_added_to_hass(self) -> None:
         await super().async_added_to_hass()
