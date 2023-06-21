@@ -27,8 +27,10 @@
 # https://github.com/home-assistant/core/blob/dev/homeassistant/components/sensor/__init__.py
 
 
+import itertools
 import logging
-from datetime import timedelta
+import statistics
+from datetime import datetime, timedelta
 from typing import Any, Callable, Dict, List, Optional
 
 from homeassistant.components.recorder.models import StatisticData, StatisticMetaData
@@ -97,31 +99,44 @@ class StatisticsMixin(HistoricalSensor):
         return self.entity_id
 
     def get_statatistic_metadata(self) -> StatisticMetaData:
-        meta = super().get_statatistic_metadata()
-        meta["has_sum"] = True
+        meta = super().get_statatistic_metadata() | {"has_sum": True, "has_mean": True}
         return meta
 
     async def async_calculate_statistic_data(
         self, hist_states: List[HistoricalState], *, latest: Optional[dict]
     ) -> List[StatisticData]:
-        if latest:
-            cutoff = dtutil.utc_from_timestamp(latest.get("end") or 0)
-            accumulated = latest.get("sum") or 0
-            hist_states = [x for x in hist_states if x.dt >= cutoff]
+        def hour_block_for_hist_state(hist_state: HistoricalState) -> datetime:
+            # XX:00:00 states belongs to previous hour block
+            if hist_state.dt.minute == 0 and hist_state.dt.second == 0:
+                dt = hist_state.dt - timedelta(hours=1)
+                return dt.replace(minute=0, second=0, microsecond=0)
 
-        else:
-            accumulated = 0
+            else:
+                return hist_state.dt.replace(minute=0, second=0, microsecond=0)
 
-        def calculate_statistics_from_accumulated(accumulated):
-            for x in hist_states:
-                accumulated = accumulated + x.state
-                # Shift start by 1 hour since DatedState.when represents the
-                # end of the period
-                yield StatisticData(
-                    start=x.dt - timedelta(hours=1), state=x.state, sum=accumulated
+        total_accumulated = latest["sum"] if latest else 0
+        ret = []
+
+        # Group historical states by hour block
+        for dt, collection_it in itertools.groupby(
+            hist_states, key=hour_block_for_hist_state
+        ):
+            collection = list(collection_it)
+
+            hour_mean = statistics.mean([x.state for x in collection])
+            hour_accumulated = sum([x.state for x in collection])
+            total_accumulated = total_accumulated + hour_accumulated
+
+            ret.append(
+                StatisticData(
+                    start=dt,
+                    state=hour_accumulated,
+                    mean=hour_mean,
+                    sum=total_accumulated,
                 )
+            )
 
-        return list(calculate_statistics_from_accumulated(accumulated))
+        return ret
 
 
 class AccumulatedConsumption(RestoreEntity, IDeEntity, SensorEntity):
