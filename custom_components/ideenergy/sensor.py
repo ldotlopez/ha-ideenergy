@@ -142,28 +142,16 @@ class AccumulatedConsumption(RestoreEntity, IDeEntity, SensorEntity):
         # https://developers.home-assistant.io/docs/core/entity/sensor/#how-to-choose-state_class-and-last_reset
         self._attr_state_class = SensorStateClass.TOTAL
 
-        # See AccumulatedConsumption._handle_coordinator_update for details about this
-        # attribute
-        self._reported_state = None
-
     @property
     def state(self):
         if self.coordinator.data is None:
             return None
 
-        self._reported_state = self.coordinator.data[DATA_ATTR_MEASURE_ACCUMULATED]
-        return self._reported_state
+        return self.coordinator.data[DATA_ATTR_MEASURE_ACCUMULATED]
 
     @callback
     def _handle_coordinator_update(self) -> None:
-        # Having the coordinator updated doesn't mean that our state has changed.
-        # Sometimes (almost of the times) coordinator updated is succesfull but our data
-        # is not updated due to the barrier.
-        #
-        # Using the self._state attribute as shield prevents duplicated states
-
-        if self._reported_state != self.coordinator.data[DATA_ATTR_MEASURE_ACCUMULATED]:
-            self.async_write_ha_state()
+        self.async_write_ha_state()
 
     async def async_added_to_hass(self) -> None:
         await super().async_added_to_hass()
