@@ -114,7 +114,11 @@ class StatisticsMixin(HistoricalSensor):
             else:
                 return hist_state.dt.replace(minute=0, second=0, microsecond=0)
 
-        total_accumulated = latest["sum"] if latest else 0
+        if latest:
+            total_accumulated = latest.get("sum", 0) or 0
+        else:
+            total_accumulated = 0
+
         ret = []
 
         # Group historical states by hour block
