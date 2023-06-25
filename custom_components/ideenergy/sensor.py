@@ -53,6 +53,7 @@ from homeassistant.helpers.typing import DiscoveryInfoType
 from homeassistant.util import dt as dtutil
 from homeassistant_historical_sensor import HistoricalSensor, HistoricalState
 
+from . import fixes
 from .const import DOMAIN
 from .datacoordinator import (
     DATA_ATTR_HISTORICAL_CONSUMPTION,
@@ -101,6 +102,10 @@ class StatisticsMixin(HistoricalSensor):
     def get_statatistic_metadata(self) -> StatisticMetaData:
         meta = super().get_statatistic_metadata() | {"has_sum": True, "has_mean": True}
         return meta
+
+    async def async_added_to_hass(self):
+        await super().async_added_to_hass()
+        await fixes.hass_fix_statistics(self.hass, statistic_id=self.statatistic_id)
 
     async def async_calculate_statistic_data(
         self, hist_states: List[HistoricalState], *, latest: Optional[dict]
