@@ -29,7 +29,8 @@
 
 import itertools
 import logging
-import statistics
+
+# import statistics
 from datetime import datetime, timedelta
 from typing import Any, Callable, Dict, List, Optional
 
@@ -100,7 +101,7 @@ class StatisticsMixin(HistoricalSensor):
         return self.entity_id
 
     def get_statatistic_metadata(self) -> StatisticMetaData:
-        meta = super().get_statatistic_metadata() | {"has_sum": True, "has_mean": True}
+        meta = super().get_statatistic_metadata() | {"has_sum": True}
         return meta
 
     async def async_added_to_hass(self):
@@ -120,11 +121,27 @@ class StatisticsMixin(HistoricalSensor):
                 return hist_state.dt.replace(minute=0, second=0, microsecond=0)
 
         if latest:
-            total_accumulated = latest.get("sum", 0) or 0
+            try:
+                total_accumulated = int(latest["sum"])
+            except (KeyError, ValueError) as e:
+                _LOGGER.error(
+                    f"{self.statatistic_id}: statistics broken, report a bug"
+                    f"(lastest={e!r})"
+                )
+                return []
         else:
             total_accumulated = 0
 
         ret = []
+
+        # Filter out invalid states
+        n_original_hist_states = len(hist_states)
+        hist_states = [x for x in hist_states if x.state not in (0, None)]
+        if len(hist_states) != n_original_hist_states:
+            _LOGGER.warning(
+                f"{self.statatistic_id}: "
+                f"found some weird values in historical statistics"
+            )
 
         # Group historical states by hour block
         for dt, collection_it in itertools.groupby(
@@ -132,7 +149,7 @@ class StatisticsMixin(HistoricalSensor):
         ):
             collection = list(collection_it)
 
-            hour_mean = statistics.mean([x.state for x in collection])
+            # hour_mean = statistics.mean([x.state for x in collection])
             hour_accumulated = sum([x.state for x in collection])
             total_accumulated = total_accumulated + hour_accumulated
 
@@ -140,7 +157,7 @@ class StatisticsMixin(HistoricalSensor):
                 StatisticData(
                     start=dt,
                     state=hour_accumulated,
-                    mean=hour_mean,
+                    # mean=hour_mean,
                     sum=total_accumulated,
                 )
             )
@@ -370,6 +387,7 @@ async def async_get_last_state_safe(
         sttype = type(state.state)
         _LOGGER.debug(
             f"{entity.entity_id}: "
-            f"restore state failed (incompatible. type='{sttype}', value='{state.state!r}')"
+            f"restore state failed "
+            f"(incompatible. type='{sttype}', value='{state.state!r}')"
         )
         return None
