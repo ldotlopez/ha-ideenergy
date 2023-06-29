@@ -34,6 +34,8 @@ import logging
 from datetime import datetime, timedelta
 from typing import Any, Callable, Dict, List, Optional
 
+from homeassistant.components import recorder
+from homeassistant.components.recorder import statistics
 from homeassistant.components.recorder.models import StatisticData, StatisticMetaData
 from homeassistant.components.sensor import (
     SensorDeviceClass,
@@ -106,11 +108,28 @@ class StatisticsMixin(HistoricalSensor):
 
     async def async_added_to_hass(self):
         await super().async_added_to_hass()
-        await fixes.hass_fix_statistics(self.hass, statistic_id=self.statatistic_id)
+        await fixes.async_fix_statistics(self.hass, self.get_statatistic_metadata())
 
     async def async_calculate_statistic_data(
         self, hist_states: List[HistoricalState], *, latest: Optional[dict]
     ) -> List[StatisticData]:
+
+        #
+        # Filter out invalid states
+        #
+
+        n_original_hist_states = len(hist_states)
+        hist_states = [x for x in hist_states if x.state not in (0, None)]
+        if len(hist_states) != n_original_hist_states:
+            _LOGGER.warning(
+                f"{self.statatistic_id}: "
+                f"found some weird values in historical statistics"
+            )
+
+        #
+        # Group historical states by hour block
+        #
+
         def hour_block_for_hist_state(hist_state: HistoricalState) -> datetime:
             # XX:00:00 states belongs to previous hour block
             if hist_state.dt.minute == 0 and hist_state.dt.second == 0:
@@ -120,30 +139,62 @@ class StatisticsMixin(HistoricalSensor):
             else:
                 return hist_state.dt.replace(minute=0, second=0, microsecond=0)
 
-        if latest:
+        #
+        # Somehow, somewhere, Home Assistant writes invalid statistics
+        # FIXME: integrate into homeassistant_historical_sensor and remove
+        #
+
+        await fixes.async_fix_statistics(self.hass, self.get_statatistic_metadata())
+
+        #
+        # Ignore supplied 'lastest' and fetch again from recorder
+        # FIXME: integrate into homeassistant_historical_sensor and remove
+        #
+
+        def get_last_statistics():
+            ret = statistics.get_last_statistics(
+                self.hass,
+                1,
+                self.statatistic_id,
+                convert_units=True,
+                types=set(["last_reset", "max", "mean", "min", "state", "sum"]),
+            )
+            if ret is None:
+                return None
+
             try:
-                total_accumulated = int(latest["sum"])
-            except (KeyError, ValueError) as e:
-                _LOGGER.error(
-                    f"{self.statatistic_id}: statistics broken, report a bug"
-                    f"(lastest={e!r})"
+                return ret[self.statatistic_id][0]
+            except (KeyError, IndexError):
+                _LOGGER.debug(
+                    f"{self.statatistic_id}: [bug] found last statistics but doesn't "
+                    f"have matching key or values: {ret!r}"
                 )
-                return []
-        else:
-            total_accumulated = 0
+                return None
+
+        latest = await recorder.get_instance(self.hass).async_add_executor_job(
+            get_last_statistics
+        )
+
+        #
+        # Get last sum sum from latest
+        #
+        def extract_last_sum(latest):
+            return int(latest["sum"]) if latest else 0
+
+        try:
+            total_accumulated = extract_last_sum(latest)
+        except (KeyError, ValueError) as e:
+            _LOGGER.error(
+                f"{self.statatistic_id}: [bug] statistics broken (lastest={e!r})"
+            )
+            return []
+
+        #
+        # Calculate statistic data
+        #
 
         ret = []
 
-        # Filter out invalid states
-        n_original_hist_states = len(hist_states)
-        hist_states = [x for x in hist_states if x.state not in (0, None)]
-        if len(hist_states) != n_original_hist_states:
-            _LOGGER.warning(
-                f"{self.statatistic_id}: "
-                f"found some weird values in historical statistics"
-            )
-
-        # Group historical states by hour block
         for dt, collection_it in itertools.groupby(
             hist_states, key=hour_block_for_hist_state
         ):

@@ -22,114 +22,169 @@ import logging
 
 import sqlalchemy as sa
 from homeassistant.components import recorder
-from homeassistant.components.recorder import db_schema
+from homeassistant.components.recorder import db_schema, statistics
 from homeassistant.core import HomeAssistant, dt_util
 from homeassistant_historical_sensor import recorderutil
 
 _LOGGER = logging.getLogger(__name__)
 
 
-async def hass_fix_statistics(hass: HomeAssistant, *, statistic_id: str):
-    """
-    v1.0.4 -> 2.0.x ()
-    Upgrade failed to manage a migration for statistics.
-
-    """
+async def async_fix_statistics(
+    hass: HomeAssistant,
+    statistic_metadata: statistics.StatisticMetaData,
+    force_recalculate=False,
+):
+    def timestamp_as_local(timestamp):
+        return dt_util.as_local(dt_util.utc_from_timestamp(timestamp))
 
     def fn():
+        statistic_id = statistic_metadata["statistic_id"]
+        statistic_metadata_has_mean = statistic_metadata.get("has_mean", False)
+        statistic_metadata_has_sum = statistic_metadata.get("has_sum", False)
+
         with recorderutil.hass_recorder_session(hass) as session:
-            statistics_meta = session.execute(
+
+            #
+            # Check and fix current metadata
+            #
+
+            current_metadata = session.execute(
                 sa.select(db_schema.StatisticsMeta).where(
                     db_schema.StatisticsMeta.statistic_id == statistic_id
                 )
             ).scalar()
 
-            if statistics_meta is None:
-                _LOGGER.debug(f"{statistic_id}: no statistics")
+            if current_metadata is None:
+                _LOGGER.debug(
+                    f"{statistic_id}: there are not statistics yet, everything is OK"
+                )
                 return
 
-            #
-            # Fix statistics_meta with has_sum=True, has_mean=False
-            #
-
-            if statistics_meta.has_sum is not True:
-                _LOGGER.debug(
-                    f"{statistic_id}: has_sum is {statistics_meta.has_sum}, "
-                    "should be True"
-                )
-                statistics_meta.has_sum = True
-
-            if statistics_meta.has_mean is not False:
-                _LOGGER.debug(
-                    f"{statistic_id}: has_mean is {statistics_meta.has_mean}, "
-                    "should be False"
-                )
-                # statistics_meta.has_mean = False
-
-            # session.add(statistics_meta)
-            # session.commit()
-
-            #
-            # Delete statistics with "no state" or "no sum"
-            # Future work: delete values for mean
-            #
-            invalid_statistics_stmt = (
-                sa.select(db_schema.Statistics)
-                .where(db_schema.Statistics.metadata_id == statistics_meta.id)
-                .where(
-                    sa.or_(
-                        db_schema.Statistics.sum == None,  # noqa: E711
-                        db_schema.Statistics.state == None,  # noqa: E711
-                        # db_schema.Statistics.mean != None,  # noqa: E711
-                    )
-                )
+            statistics_base_stmt = sa.select(db_schema.Statistics).where(
+                db_schema.Statistics.metadata_id == current_metadata.id
             )
+
+            metadata_needs_fixes = (
+                current_metadata.has_mean != statistic_metadata_has_mean
+            ) or (current_metadata.has_sum != statistic_metadata_has_sum)
+
+            if metadata_needs_fixes:
+                _LOGGER.debug(
+                    f"{statistic_id}: statistic metadata is outdated."
+                    f" has_mean:{current_metadata.has_mean}→{statistic_metadata_has_mean}"
+                    f" has_sum:{current_metadata.has_sum}→{statistic_metadata_has_sum}"
+                )
+                current_metadata.has_mean = statistic_metadata_has_mean
+                current_metadata.has_sum = statistic_metadata_has_sum
+                # session.add(current_metadata)
+                # session.commit(current_metadata)
+
+            #
+            # Check for broken points
+            #
+
+            clauses_for_additional_or_ = [db_schema.Statistics.state == None]
+            if statistic_metadata_has_mean:
+                clauses_for_additional_or_.append(db_schema.Statistics.mean == None)
+            if statistic_metadata_has_sum:
+                clauses_for_additional_or_.append(db_schema.Statistics.sum == None)
+
+            find_broken_point_stmt = (
+                sa.select(sa.func.min(db_schema.Statistics.start_ts))
+                .where(db_schema.Statistics.metadata_id == current_metadata.id)
+                .where(sa.or_(*clauses_for_additional_or_))
+            )
+
+            broken_point = session.execute(find_broken_point_stmt).scalar()
+
+            if broken_point:
+                invalid_statistics_stmt = statistics_base_stmt.where(
+                    db_schema.Statistics.start_ts >= broken_point
+                )
+                invalid_statistics = (
+                    session.execute(invalid_statistics_stmt).scalars().fetchall()
+                )
+
+                for x in invalid_statistics:
+                    session.delete(x)
+
+                session.commit()
+
+                _LOGGER.debug(
+                    f"{statistic_id}: "
+                    f"found broken point at {timestamp_as_local(broken_point)},"
+                    f" deleted {len(invalid_statistics)} statistics"
+                )
+
+            #
+            # Delete additional statistics
+            #
+
+            clauses_for_additional_or_ = [db_schema.Statistics.state == None]
+
+            if statistic_metadata_has_mean:
+                clauses_for_additional_or_.append(db_schema.Statistics.mean == None)
+
+            if statistic_metadata_has_sum:
+                clauses_for_additional_or_.append(db_schema.Statistics.sum == None)
+
+            invalid_statistics_stmt = statistics_base_stmt.where(
+                sa.or_(*clauses_for_additional_or_)
+            )
+
             invalid_statistics = (
                 session.execute(invalid_statistics_stmt).scalars().fetchall()
             )
 
             if invalid_statistics:
-                _LOGGER.warning(
+                for o in invalid_statistics:
+                    session.delete(o)
+                session.commit()
+
+                _LOGGER.debug(
                     f"{statistic_id}: "
-                    f"found {len(invalid_statistics)} statistics with old statistics fields"
+                    f"deleted {len(invalid_statistics)} statistics with invalid attributes"
                 )
-                # for o in invalid_statistics:
-                #     session.delete(o)
-                # session.commit()
 
             #
-            # Broken sum's?
+            # Recalculate
             #
-            reset_point = session.execute(
-                sa.select(sa.func.min(db_schema.Statistics.start_ts))
-                .where(db_schema.Statistics.metadata_id == statistics_meta.id)
-                .where(
-                    sa.or_(db_schema.Statistics.state == None),
-                    sa.or_(db_schema.Statistics.sum == None),
-                )
-            ).scalar()
 
-            if reset_point:
-                invalid_states = (
-                    session.execute(
-                        sa.select(db_schema.Statistics)
-                        .where(db_schema.Statistics.metadata_id == statistics_meta.id)
-                        .where(db_schema.Statistics.start_ts >= reset_point)
-                    )
-                    .scalars()
-                    .fetchall()
-                )
+            # if not broken_point and not force_recalculate:
+            #     return
 
-                reset_point_human = dt_util.as_local(
-                    dt_util.utc_from_timestamp(reset_point)
-                )
-                _LOGGER.warning(
-                    f"{statistic_id}: Found broken sum's since {reset_point_human}, "
-                    f"{len(invalid_states)} should be deleted"
-                )
+            # if broken_point:
+            #     _LOGGER.debug(
+            #         f"{statistic_id}: found broken statistics since"
+            #         f" {timestamp_as_local(broken_point.start_ts)},"
+            #         f" recalculating everything from there"
+            #     )
 
-                # for o in invalid_states:
-                #     session.delete(o)
-                # session.commit()
+            #
+            # Recalculate all stats
+            #
+
+            # accumulated = 0
+            # for statistic in session.execute(
+            #     sa.select(db_schema.Statistics)
+            #     .where(db_schema.Statistics.metadata_id == statistic_id)
+            #     .order_by(db_schema.Statistics.start_ts.asc)
+            # ):
+            #     accumulated = accumulated + statistic.state
+
+            #     # fmt: off
+            #     statistic.mean = statistic.state if statistic_metadata_has_mean else None
+            #     statistic.sum = accumulated if statistic_metadata_has_sum else None
+            #     statistic.min = None
+            #     statistic.max = None
+            #     # fmt: on
+
+            #     session.add(statistic)
+            #     _LOGGER.debug(
+            #         f"{statistic_id}: "
+            #         f"update {statistic.id} {timestamp_as_local(statistic.start_ts)} "
+            #         f"value={statistic.value}\tsum={statistic.sum}"
+            #     )
+            # session.commit()
 
     return await recorder.get_instance(hass).async_add_executor_job(fn)
