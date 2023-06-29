@@ -76,8 +76,8 @@ async def async_fix_statistics(
                 )
                 current_metadata.has_mean = statistic_metadata_has_mean
                 current_metadata.has_sum = statistic_metadata_has_sum
-                # session.add(current_metadata)
-                # session.commit(current_metadata)
+                session.add(current_metadata)
+                session.commit()
 
             #
             # Check for broken points
