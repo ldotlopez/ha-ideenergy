@@ -30,20 +30,19 @@ _LOGGER = logging.getLogger(__name__)
 
 
 async def async_fix_statistics(
-    hass: HomeAssistant,
-    statistic_metadata: statistics.StatisticMetaData,
-    force_recalculate=False,
-):
+    hass: HomeAssistant, statistic_metadata: statistics.StatisticMetaData
+) -> None:
     def timestamp_as_local(timestamp):
         return dt_util.as_local(dt_util.utc_from_timestamp(timestamp))
 
     def fn():
+        fixes_applied = False
+
         statistic_id = statistic_metadata["statistic_id"]
         statistic_metadata_has_mean = statistic_metadata.get("has_mean", False)
         statistic_metadata_has_sum = statistic_metadata.get("has_sum", False)
 
         with recorderutil.hass_recorder_session(hass) as session:
-
             #
             # Check and fix current metadata
             #
@@ -55,9 +54,7 @@ async def async_fix_statistics(
             ).scalar()
 
             if current_metadata is None:
-                _LOGGER.debug(
-                    f"{statistic_id}: there are not statistics yet, everything is OK"
-                )
+                _LOGGER.debug(f"{statistic_id}: no statistics found, nothing to fix")
                 return
 
             statistics_base_stmt = sa.select(db_schema.Statistics).where(
@@ -78,25 +75,62 @@ async def async_fix_statistics(
                 current_metadata.has_sum = statistic_metadata_has_sum
                 session.add(current_metadata)
                 session.commit()
+                fixes_applied = True
 
             #
-            # Check for broken points
+            # Check for broken points and decreasings
             #
+            broken_point = None
 
-            clauses_for_additional_or_ = [db_schema.Statistics.state == None]
-            if statistic_metadata_has_mean:
-                clauses_for_additional_or_.append(db_schema.Statistics.mean == None)
-            if statistic_metadata_has_sum:
-                clauses_for_additional_or_.append(db_schema.Statistics.sum == None)
-
-            find_broken_point_stmt = (
-                sa.select(sa.func.min(db_schema.Statistics.start_ts))
-                .where(db_schema.Statistics.metadata_id == current_metadata.id)
-                .where(sa.or_(*clauses_for_additional_or_))
+            prev_sum = 0
+            statistics_iter_stmt = statistics_base_stmt.order_by(
+                db_schema.Statistics.start_ts.asc()
             )
 
-            broken_point = session.execute(find_broken_point_stmt).scalar()
+            for statistic in session.execute(statistics_iter_stmt).scalars():
+                is_broken = False
 
+                # Check for NULL mean
+                if statistic_metadata_has_mean and statistic.mean is None:
+                    is_broken = True
+
+                # Check for NULL sum
+                if statistic_metadata_has_sum and statistic.sum is None:
+                    is_broken = True
+
+                # Check for decreasing values in sum
+                if statistic_metadata_has_sum and statistic.sum:
+                    if statistic.sum < prev_sum:
+                        is_broken = True
+                    else:
+                        prev_sum = statistic.sum
+
+                # Found anything broken?
+                if is_broken:
+                    broken_point = statistic.start_ts
+                    break
+
+            #
+            # Check for broken points (search only for NULLs)
+            #
+
+            # clauses_for_additional_or_ = [db_schema.Statistics.state == None]
+            # if statistic_metadata_has_mean:
+            #     clauses_for_additional_or_.append(db_schema.Statistics.mean == None)
+            # if statistic_metadata_has_sum:
+            #     clauses_for_additional_or_.append(db_schema.Statistics.sum == None)
+
+            # find_broken_point_stmt = (
+            #     sa.select(sa.func.min(db_schema.Statistics.start_ts))
+            #     .where(db_schema.Statistics.metadata_id == current_metadata.id)
+            #     .where(sa.or_(*clauses_for_additional_or_))
+            # )
+
+            # broken_point = session.execute(find_broken_point_stmt).scalar()
+
+            #
+            # Delete everything after broken point
+            #
             if broken_point:
                 invalid_statistics_stmt = statistics_base_stmt.where(
                     db_schema.Statistics.start_ts >= broken_point
@@ -109,6 +143,7 @@ async def async_fix_statistics(
                     session.delete(x)
 
                 session.commit()
+                fixes_applied = True
 
                 _LOGGER.debug(
                     f"{statistic_id}: "
@@ -140,11 +175,15 @@ async def async_fix_statistics(
                 for o in invalid_statistics:
                     session.delete(o)
                 session.commit()
+                fixes_applied = True
 
                 _LOGGER.debug(
                     f"{statistic_id}: "
                     f"deleted {len(invalid_statistics)} statistics with invalid attributes"
                 )
+
+            if not fixes_applied:
+                _LOGGER.debug(f"{statistic_id}: no problems found")
 
             #
             # Recalculate

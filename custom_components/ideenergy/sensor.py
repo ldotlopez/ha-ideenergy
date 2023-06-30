@@ -183,9 +183,9 @@ class StatisticsMixin(HistoricalSensor):
 
         try:
             total_accumulated = extract_last_sum(latest)
-        except (KeyError, ValueError) as e:
+        except (KeyError, ValueError):
             _LOGGER.error(
-                f"{self.statatistic_id}: [bug] statistics broken (lastest={e!r})"
+                f"{self.statatistic_id}: [bug] statistics broken (lastest={latest!r})"
             )
             return []
 

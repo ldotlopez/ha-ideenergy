@@ -10,6 +10,7 @@ homeassistant = ">= 2023.6.1"
 ipython = "*"
 ipdb = "*"
 homeassistant-historical-sensor = {editable = true, path = "./../ha-historical-sensor"}
+sqlalchemy = "*"
 
 [requires]
 python_version = "3"
