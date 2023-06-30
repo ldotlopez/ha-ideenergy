@@ -89,19 +89,31 @@ async def async_fix_statistics(
 
             for statistic in session.execute(statistics_iter_stmt).scalars():
                 is_broken = False
+                local_start_dt = timestamp_as_local(statistic.start_ts)
 
                 # Check for NULL mean
                 if statistic_metadata_has_mean and statistic.mean is None:
                     is_broken = True
+                    _LOGGER.debug(
+                        f"{statistic_id}: mean value at {local_start_dt} is NULL"
+                    )
 
                 # Check for NULL sum
                 if statistic_metadata_has_sum and statistic.sum is None:
                     is_broken = True
+                    _LOGGER.debug(
+                        f"{statistic_id}: sum value at {local_start_dt} is NULL"
+                    )
 
                 # Check for decreasing values in sum
                 if statistic_metadata_has_sum and statistic.sum:
                     if statistic.sum < prev_sum:
                         is_broken = True
+                        _LOGGER.debug(
+                            f"{statistic_id}: "
+                            + f"decreasing sum at {local_start_dt} "
+                            + f"{statistic.sum} < {prev_sum} ({statistic!r})"
+                        )
                     else:
                         prev_sum = statistic.sum
 

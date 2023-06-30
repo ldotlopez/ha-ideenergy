@@ -178,8 +178,8 @@ class StatisticsMixin(HistoricalSensor):
         #
         # Get last sum sum from latest
         #
-        def extract_last_sum(latest):
-            return int(latest["sum"]) if latest else 0
+        def extract_last_sum(latest) -> float:
+            return float(latest["sum"]) if latest else 0
 
         try:
             total_accumulated = extract_last_sum(latest)
@@ -188,6 +188,16 @@ class StatisticsMixin(HistoricalSensor):
                 f"{self.statatistic_id}: [bug] statistics broken (lastest={latest!r})"
             )
             return []
+
+        start_point_local_dt = dt_util.as_local(
+            dt_util.utc_from_timestamp(latest.get("start", 0) if latest else 0)
+        )
+
+        _LOGGER.debug(
+            f"{self.statatistic_id}: "
+            + f"calculating statistics using {total_accumulated} as base accumulated "
+            + f"(registed at {start_point_local_dt})"
+        )
 
         #
         # Calculate statistic data
