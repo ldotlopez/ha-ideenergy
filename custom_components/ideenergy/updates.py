@@ -1,5 +1,3 @@
-# -*- coding: utf-8 -*-
-
 # Copyright (C) 2021-2022 Luis López <luis@cuarentaydos.com>
 #
 # This program is free software; you can redistribute it and/or
@@ -19,7 +17,6 @@
 
 
 import logging
-from typing import Type
 
 from custom_components.ideenergy.const import DOMAIN
 from homeassistant.config_entries import ConfigEntry
@@ -28,16 +25,13 @@ from homeassistant.helpers import device_registry, entity_registry
 from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.util import slugify
 
-from .entity import (
-    _build_entity_entity_id as _build_entity_entity_id_v3,
-    _build_entity_unique_id as _build_entity_unique_id_v3,
-    IDeEntity,
-)
+from .entity import IDeEntity
+from .entity import _build_entity_unique_id as _build_entity_unique_id_v3
 from .sensor import AccumulatedConsumption, HistoricalConsumption
 
 _LOGGER = logging.getLogger(__name__)
 
-SensorType = Type["IDeEntity"]
+SensorType = type[IDeEntity]
 
 
 def update_integration(

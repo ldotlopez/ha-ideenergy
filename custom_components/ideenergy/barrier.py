@@ -1,5 +1,3 @@
-# -*- coding: utf-8 -*-
-
 # Copyright (C) 2021-2022 Luis López <luis@cuarentaydos.com>
 #
 # This program is free software; you can redistribute it and/or
@@ -24,9 +22,9 @@ import functools
 import logging
 from abc import abstractmethod
 from datetime import timedelta
-from typing import Any, Optional, Tuple, Union
+from typing import Any
 
-from homeassistant.util import dt as dt_util
+from homeassistant.core import dt_util
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -46,7 +44,7 @@ DEFAULT_MAX_RETRIES = 3
 
 
 def check_tzinfo(
-    param: Union[str, int], default_tzinfo=datetime.timezone.utc, optional=False
+    param: str | int, default_tzinfo=datetime.timezone.utc, optional=False
 ):
     def decorator(fn):
         @functools.wraps(fn)
@@ -118,7 +116,7 @@ class TimeDeltaBarrier(Barrier):
     def __init__(
         self,
         delta: datetime.timedelta,
-        last_success: Optional[datetime.datetime] = None,
+        last_success: datetime.datetime | None = None,
     ):
         self._delta = delta
         self._last_success = last_success or dt_util.utc_from_timestamp(0)
@@ -178,7 +176,7 @@ class RetryableBarrier:
 class TimeWindowBarrier(Barrier):
     def __init__(
         self,
-        allowed_window_minutes: Tuple[int, int],
+        allowed_window_minutes: tuple[int, int],
         max_retries: int,
         max_age: timedelta,
     ):

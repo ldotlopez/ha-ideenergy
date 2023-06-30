@@ -1,5 +1,3 @@
-# -*- coding: utf-8 -*-
-
 # Copyright (C) 2021-2022 Luis López <luis@cuarentaydos.com>
 #
 # This program is free software; you can redistribute it and/or
@@ -32,7 +30,7 @@ import logging
 
 # import statistics
 from datetime import datetime, timedelta
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Callable
 
 from homeassistant.components import recorder
 from homeassistant.components.recorder import statistics
@@ -49,7 +47,7 @@ from homeassistant.const import (
     UnitOfEnergy,
     UnitOfPower,
 )
-from homeassistant.core import HomeAssistant, callback
+from homeassistant.core import HomeAssistant, callback, dt_util
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.restore_state import RestoreEntity
 from homeassistant.helpers.typing import DiscoveryInfoType
@@ -111,8 +109,8 @@ class StatisticsMixin(HistoricalSensor):
         await fixes.async_fix_statistics(self.hass, self.get_statatistic_metadata())
 
     async def async_calculate_statistic_data(
-        self, hist_states: List[HistoricalState], *, latest: Optional[dict]
-    ) -> List[StatisticData]:
+        self, hist_states: list[HistoricalState], *, latest: dict | None
+    ) -> list[StatisticData]:
 
         #
         # Filter out invalid states
@@ -157,7 +155,7 @@ class StatisticsMixin(HistoricalSensor):
                 1,
                 self.statatistic_id,
                 convert_units=True,
-                types=set(["last_reset", "max", "mean", "min", "state", "sum"]),
+                types={"last_reset", "max", "mean", "min", "state", "sum"},
             )
             if ret is None:
                 return None
@@ -379,7 +377,7 @@ async def async_setup_entry(
     hass: HomeAssistant,
     config_entry: ConfigEntry,
     async_add_devices: AddEntitiesCallback,
-    discovery_info: Optional[DiscoveryInfoType] = None,  # noqa DiscoveryInfoType | None
+    discovery_info: DiscoveryInfoType | None = None,  # noqa DiscoveryInfoType | None
 ):
     coordinator, device_info = hass.data[DOMAIN][config_entry.entry_id]
 
@@ -404,8 +402,8 @@ async def async_setup_entry(
 
 
 def historical_states_from_historical_api_data(
-    data: Optional[List[Dict]] = None,
-) -> List[HistoricalState]:
+    data: list[dict] | None = None,
+) -> list[HistoricalState]:
     def _convert_item(item):
         # FIXME: What about canary islands?
         dt = item["end"].replace(tzinfo=MAINLAND_SPAIN_ZONEINFO)

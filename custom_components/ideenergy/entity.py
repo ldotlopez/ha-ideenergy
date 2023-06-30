@@ -1,5 +1,3 @@
-# -*- coding: utf-8 -*-
-
 # Copyright (C) 2021-2022 Luis López <luis@cuarentaydos.com>
 #
 # This program is free software; you can redistribute it and/or
@@ -23,7 +21,6 @@
 # from homeassistant.core import callback
 
 import logging
-from typing import Type
 
 from homeassistant.components import recorder
 from homeassistant.helpers.entity import DeviceInfo
@@ -34,7 +31,7 @@ from homeassistant_historical_sensor.recorderutil import (
     hass_recorder_session,
 )
 
-SensorType = Type["IDeEntity"]
+SensorType = type["IDeEntity"]
 
 
 _LOGGER = logging.getLogger(__name__)

@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 #
 # Copyright (C) 2021 Luis López <luis@cuarentaydos.com>
 #
@@ -19,9 +18,8 @@
 
 
 import os
-from typing import Any, Optional
+from typing import Any
 
-import ideenergy
 import voluptuous as vol
 from homeassistant import config_entries
 from homeassistant.const import CONF_PASSWORD, CONF_USERNAME
@@ -29,8 +27,10 @@ from homeassistant.core import callback  # noqa: F401
 from homeassistant.data_entry_flow import FlowResult
 from homeassistant.helpers.aiohttp_client import async_create_clientsession
 
+import ideenergy
+
 from . import _LOGGER
-from .const import CONF_CONTRACT, DOMAIN, CONFIG_ENTRY_VERSION
+from .const import CONF_CONTRACT, CONFIG_ENTRY_VERSION, DOMAIN
 
 AUTH_SCHEMA = vol.Schema(
     {
@@ -54,7 +54,7 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):  # type: ignore[call
     #     return OptionsFlowHandler(config_entry)
 
     async def async_step_user(
-        self, user_input: Optional[dict[str, Any]] = None
+        self, user_input: dict[str, Any] | None = None
     ) -> FlowResult:
         """Handle a flow initialized by the user."""
         errors = {}
@@ -95,7 +95,7 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):  # type: ignore[call
         )
 
     async def async_step_contract(
-        self, user_input: Optional[dict[str, Any]] = None
+        self, user_input: dict[str, Any] | None = None
     ) -> FlowResult:
         contracts = await self.api.get_contracts()
         contracts = {f"{x['cups']} ({x['direccion']})": x for x in contracts}

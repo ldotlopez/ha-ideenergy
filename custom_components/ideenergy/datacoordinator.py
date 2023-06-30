@@ -1,5 +1,3 @@
-# -*- coding: utf-8 -*-
-
 # Copyright (C) 2021-2022 Luis López <luis@cuarentaydos.com>
 #
 # This program is free software; you can redistribute it and/or
@@ -21,13 +19,12 @@
 import enum
 import logging
 from datetime import datetime, timedelta, timezone
-from typing import Any, Dict, Optional, Union
+from typing import Any
+
+from homeassistant.core import dt_util
+from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 
 import ideenergy
-from homeassistant.helpers.update_coordinator import (
-    DataUpdateCoordinator,
-)  # ConfigEntryAuthFailed,; UpdateFailed
-from homeassistant.util import dt as dt_util
 
 from .barrier import Barrier, BarrierDeniedError
 from .const import (
@@ -53,7 +50,7 @@ class DataSetType(enum.IntFlag):
 
 _LOGGER = logging.getLogger(__name__)
 
-_DEFAULT_COORDINATOR_DATA: Dict[str, Any] = {
+_DEFAULT_COORDINATOR_DATA: dict[str, Any] = {
     DATA_ATTR_MEASURE_ACCUMULATED: None,
     DATA_ATTR_MEASURE_INSTANT: None,
     DATA_ATTR_HISTORICAL_CONSUMPTION: {
@@ -75,7 +72,7 @@ class IDeCoordinator(DataUpdateCoordinator):
         self,
         hass,
         api,
-        barriers: Dict[DataSetType, Barrier],
+        barriers: dict[DataSetType, Barrier],
         update_interval: timedelta = timedelta(seconds=30),
     ):
         name = (
@@ -96,7 +93,7 @@ class IDeCoordinator(DataUpdateCoordinator):
         _LOGGER.debug(f"Unregistered sensor '{sensor.__class__.__name__}'")
         self.sensors.remove(sensor)
 
-    def update_internal_data(self, data: Dict[str, Any]):
+    def update_internal_data(self, data: dict[str, Any]):
         if self.data is None:  # type: ignore[has-type]
             self.data = _DEFAULT_COORDINATOR_DATA
 
@@ -133,8 +130,8 @@ class IDeCoordinator(DataUpdateCoordinator):
         return data
 
     async def _async_update_data_raw(
-        self, datasets: DataSetType = DataSetType.ALL, now: Optional[datetime] = None
-    ) -> Dict[str, Any]:
+        self, datasets: DataSetType = DataSetType.ALL, now: datetime | None = None
+    ) -> dict[str, Any]:
         now = now or dt_util.utcnow()
         if now.tzinfo != timezone.utc:
             raise ValueError("now is missing tzinfo field")
@@ -217,7 +214,7 @@ class IDeCoordinator(DataUpdateCoordinator):
 
         return data
 
-    async def get_direct_reading_data(self) -> Dict[str, Union[int, float]]:
+    async def get_direct_reading_data(self) -> dict[str, int | float]:
         data = await self.api.get_measure()
 
         return {
