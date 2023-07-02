@@ -16,12 +16,11 @@
 # USA.
 
 
-import datetime
 import enum
 import functools
 import logging
 from abc import abstractmethod
-from datetime import timedelta
+from datetime import timedelta, timezone, datetime
 from typing import Any
 
 from homeassistant.core import dt_util
@@ -44,7 +43,9 @@ DEFAULT_MAX_RETRIES = 3
 
 
 def check_tzinfo(
-    param: str | int, default_tzinfo=datetime.timezone.utc, optional=False
+    param: str | int,
+    default_tzinfo: timezone = timezone.utc,
+    optional: bool = False,
 ):
     def decorator(fn):
         @functools.wraps(fn)
@@ -62,7 +63,7 @@ def check_tzinfo(
                 else:
                     raise TypeError(f"{param} is missing")
 
-            if not isinstance(dt, datetime.datetime):
+            if not isinstance(dt, datetime):
                 raise TypeError(f"{param} must be a datetime object")
 
             if dt.tzinfo is None and default_tzinfo is None:
@@ -85,19 +86,19 @@ def check_tzinfo(
 
 class Barrier:
     @abstractmethod
-    def check(self, **kwargs: Any):
+    def check(self, **kwargs: Any) -> None:
         raise NotImplementedError()
 
     @abstractmethod
-    def success(self, **kwargs: Any):
+    def success(self, **kwargs: Any) -> None:
         raise NotImplementedError()
 
     @abstractmethod
-    def fail(self, **kwargs: Any):
+    def fail(self, **kwargs: Any) -> None:
         raise NotImplementedError()
 
     @abstractmethod
-    def dump(self):
+    def dump(self) -> dict[str, Any]:
         return {}
 
 
@@ -115,14 +116,14 @@ class TimeDeltaBarrier(Barrier):
     @check_tzinfo("last_success", optional=True)
     def __init__(
         self,
-        delta: datetime.timedelta,
-        last_success: datetime.datetime | None = None,
+        delta: timedelta,
+        last_success: datetime | None = None,
     ):
         self._delta = delta
         self._last_success = last_success or dt_util.utc_from_timestamp(0)
 
     @check_tzinfo("now", optional=True)
-    def check(self, now=None):
+    def check(self, now: datetime | None = None) -> None:
         now = now or self.utcnow()
 
         diff = now - self._last_success
@@ -133,26 +134,26 @@ class TimeDeltaBarrier(Barrier):
             )
 
     @check_tzinfo("now", optional=True)
-    def success(self, now=None):
+    def success(self, now: datetime | None = None) -> None:
         now = now or self.utcnow()
         self._last_success = now
 
     @check_tzinfo("now", optional=True)
-    def fail(self, now=None):
+    def fail(self, now: datetime | None = None) -> None:
         pass
 
-    def utcnow(self):
+    def utcnow(self) -> datetime:
         return dt_util.utcnow()
 
     @property
-    def delta(self):
+    def delta(self) -> timedelta:
         return self._delta
 
     @property
-    def last_success(self):
+    def last_success(self) -> datetime:
         return self._last_success
 
-    def dump(self):
+    def dump(self) -> dict[str, Any]:
         return {ATTR_MAX_AGE: self.delta, ATTR_LAST_SUCCESS: self.last_success}
 
 
@@ -161,15 +162,15 @@ class TimeDeltaBarrierDenyError(enum.Enum):
 
 
 class RetryableBarrier:
-    def __init__(self, max_retries=DEFAULT_MAX_RETRIES):
+    def __init__(self, max_retries: int = DEFAULT_MAX_RETRIES):
         self._max_retries = max_retries
 
     @property
-    def attributes(self):
+    def attributes(self) -> dict[str, Any]:
         return {ATTR_MAX_RETRIES: self._max_retries}
 
     @property
-    def max_retries(self):
+    def max_retries(self) -> int:
         return self._max_retries
 
 
@@ -192,11 +193,10 @@ class TimeWindowBarrier(Barrier):
         self._last_success = zero_dt
         self._cooldown = zero_dt
 
-    def utcnow(self):
+    def utcnow(self) -> datetime:
         return dt_util.utcnow()
 
-    @property
-    def dump(self):
+    def dump(self) -> dict[str, Any]:
         ret = {
             # Configuration
             ATTR_MAX_AGE: self._max_age,
@@ -212,7 +212,7 @@ class TimeWindowBarrier(Barrier):
         return ret
 
     @check_tzinfo("now", optional=True)
-    def check(self, now=None):
+    def check(self, now: datetime | None = None) -> None:
         """
         Checks (in order), important for testing
         - forced
@@ -268,11 +268,11 @@ class TimeWindowBarrier(Barrier):
                 code=TimeWindowBarrierDenyError.NO_DELTA, reason=reason
             )
 
-    def force_next(self):
+    def force_next(self) -> None:
         self._force_next = True
 
     @check_tzinfo("now", optional=True)
-    def success(self, now=None):
+    def success(self, now: datetime | None = None) -> None:
         now = now or self.utcnow()
 
         self._force_next = False
@@ -282,7 +282,7 @@ class TimeWindowBarrier(Barrier):
         _LOGGER.debug("success registered")
 
     @check_tzinfo("now", optional=True)
-    def fail(self, now=None):
+    def fail(self, now: datetime | None = None) -> None:
         now = now or self.utcnow()
 
         self._failures = self._failures + 1
@@ -305,7 +305,7 @@ class TimeWindowBarrierDenyError(enum.Enum):
 
 
 class NoopBarrier(Barrier):
-    def check(self):
+    def check(self, **kwargs) -> None:
         pass
 
     def success(self):
@@ -314,5 +314,5 @@ class NoopBarrier(Barrier):
     def fail(self):
         pass
 
-    def dump(self):
+    def dump(self) -> dict[str, Any]:
         return {}
