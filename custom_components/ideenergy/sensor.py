@@ -121,7 +121,7 @@ class StatisticsMixin(HistoricalSensor):
         if len(hist_states) != n_original_hist_states:
             _LOGGER.warning(
                 f"{self.statatistic_id}: "
-                f"found some weird values in historical statistics"
+                + "found some weird values in historical statistics"
             )
 
         #
@@ -165,7 +165,7 @@ class StatisticsMixin(HistoricalSensor):
             except (KeyError, IndexError):
                 _LOGGER.debug(
                     f"{self.statatistic_id}: [bug] found last statistics but doesn't "
-                    f"have matching key or values: {ret!r}"
+                    + f"have matching key or values: {ret!r}"
                 )
                 return None
 
@@ -445,8 +445,7 @@ async def async_get_last_state_safe(
     except (TypeError, ValueError):
         sttype = type(state.state)
         _LOGGER.debug(
-            f"{entity.entity_id}: "
-            f"restore state failed "
-            f"(incompatible. type='{sttype}', value='{state.state!r}')"
+            f"{entity.entity_id}: restore state failed "
+            + f"(incompatible. type='{sttype}', value='{state.state!r}')"
         )
         return None

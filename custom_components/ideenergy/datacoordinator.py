@@ -82,8 +82,11 @@ class IDeCoordinator(DataUpdateCoordinator):
 
         self.api = api
         self.barriers = barriers
-        self.platforms = []  # type: ignore[var-annotated]
-        self.sensors = []  # type: ignore[var-annotated]
+
+        # FIXME: platforms from HomeAssistant should have types
+        self.platforms: list[str] = []
+
+        self.sensors: list[IDeEntity] = []
 
     def register_sensor(self, sensor: IDeEntity) -> None:
         self.sensors.append(sensor)
