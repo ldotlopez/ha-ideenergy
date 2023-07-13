@@ -19,13 +19,13 @@ Give it some time, two or three days, before filing a bug.
 
 ## Q. Why accumulated (or instant) consumption sensors are only updated once at hour? Can be this interval shorter?
 
-These sensors need to read the service point directly. 
+These sensors need to read the service point directly.
 
 The i-de.es service point API is not very reliable, we try up to three calls before giving up in each update window (interval 50-59 of each hour).
 
 On the other hand, the i-de.es platform blocks users if the service point is queried your user if he queries the service point too often. In our experience, no more than 5-6 calls in 10 minutes.
 
-The policy of updating the sensors only once an hour is given by the sum of these two situations. 
+The policy of updating the sensors only once an hour is given by the sum of these two situations.
 
 ## Q. Accumulated (or instant) consumption sensor shows 0 increment at some intervals.
 

@@ -56,7 +56,7 @@ It also necessary to have an "Advanced User" profile. Should you not have one al
 
   - On the "repositorysitory" field put the URL copied before
   - On the "Category" select "Integration"
-  - Click the "Download" button and download latest version. 
+  - Click the "Download" button and download latest version.
 
   ![Custom repositorysitory](https://user-images.githubusercontent.com/59612788/171965822-4a89c14e-9eb2-4134-8de2-1d3f380663e4.png)
 

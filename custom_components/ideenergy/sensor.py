@@ -33,13 +33,19 @@ from typing import Any
 
 from homeassistant.components import recorder
 from homeassistant.components.recorder import statistics
-from homeassistant.components.recorder.models import (StatisticData,
-                                                      StatisticMetaData)
-from homeassistant.components.sensor import (SensorDeviceClass, SensorEntity,
-                                             SensorStateClass)
+from homeassistant.components.recorder.models import StatisticData, StatisticMetaData
+from homeassistant.components.sensor import (
+    SensorDeviceClass,
+    SensorEntity,
+    SensorStateClass,
+)
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import (STATE_UNAVAILABLE, STATE_UNKNOWN,
-                                 UnitOfEnergy, UnitOfPower)
+from homeassistant.const import (
+    STATE_UNAVAILABLE,
+    STATE_UNKNOWN,
+    UnitOfEnergy,
+    UnitOfPower,
+)
 from homeassistant.core import HomeAssistant, callback, dt_util
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.restore_state import RestoreEntity
@@ -48,11 +54,14 @@ from homeassistant.util import dt as dtutil
 from homeassistant_historical_sensor import HistoricalSensor, HistoricalState
 
 from .const import DOMAIN
-from .datacoordinator import (DATA_ATTR_HISTORICAL_CONSUMPTION,
-                              DATA_ATTR_HISTORICAL_GENERATION,
-                              DATA_ATTR_HISTORICAL_POWER_DEMAND,
-                              DATA_ATTR_MEASURE_ACCUMULATED,
-                              DATA_ATTR_MEASURE_INSTANT, DataSetType)
+from .datacoordinator import (
+    DATA_ATTR_HISTORICAL_CONSUMPTION,
+    DATA_ATTR_HISTORICAL_GENERATION,
+    DATA_ATTR_HISTORICAL_POWER_DEMAND,
+    DATA_ATTR_MEASURE_ACCUMULATED,
+    DATA_ATTR_MEASURE_INSTANT,
+    DataSetType,
+)
 from .entity import IDeEntity
 from .fixes import async_fix_statistics
 
