@@ -1,6 +1,11 @@
+[tool.black]
+target-version = ['py310']
+
 [tool.isort]
 profile = "black"
 
-
 [tool.pyupgrade]
 addopts = "--py310-plus"
+
+[tool.mypy]
+files = ["custom_components/ideenergy"]
