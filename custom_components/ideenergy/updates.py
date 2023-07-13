@@ -18,12 +18,13 @@
 
 import logging
 
-from custom_components.ideenergy.const import DOMAIN
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import device_registry, entity_registry
 from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.util import slugify
+
+from custom_components.ideenergy.const import DOMAIN
 
 from .entity import IDeEntity
 from .entity import _build_entity_unique_id as _build_entity_unique_id_v3
@@ -150,7 +151,7 @@ def _update_entity_registry_v1(
         ("historical", HistoricalConsumption),
     )
 
-    for (old_sensor_type, new_sensor_cls) in migrate:
+    for old_sensor_type, new_sensor_cls in migrate:
         entity_id = er.async_get_entity_id(
             "sensor",
             "ideenergy",

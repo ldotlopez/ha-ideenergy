@@ -21,10 +21,9 @@ import logging
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
+import ideenergy
 from homeassistant.core import dt_util
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
-
-import ideenergy
 
 from .barrier import Barrier, BarrierDeniedError
 from .const import (
