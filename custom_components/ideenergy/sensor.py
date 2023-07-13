@@ -27,10 +27,11 @@
 
 import itertools
 import logging
+from collections.abc import Callable
 
 # import statistics
 from datetime import datetime, timedelta
-from typing import Any, Callable
+from typing import Any
 
 from homeassistant.components import recorder
 from homeassistant.components.recorder import statistics
@@ -52,9 +53,8 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.restore_state import RestoreEntity
 from homeassistant.helpers.typing import DiscoveryInfoType
 from homeassistant.util import dt as dtutil
-from homeassistant_historical_sensor import HistoricalSensor, HistoricalState
+from homeassistant_historical_sensor import HistoricalSensor, HistoricalState, fixes
 
-from . import fixes
 from .const import DOMAIN
 from .datacoordinator import (
     DATA_ATTR_HISTORICAL_CONSUMPTION,
@@ -97,21 +97,26 @@ class HistoricalSensorMixin(HistoricalSensor):
 
 class StatisticsMixin(HistoricalSensor):
     @property
-    def statatistic_id(self):
+    def statistic_id(self):
         return self.entity_id
 
-    def get_statatistic_metadata(self) -> StatisticMetaData:
-        meta = super().get_statatistic_metadata() | {"has_sum": True}
+    def get_statistic_metadata(self) -> StatisticMetaData:
+        meta = super().get_statistic_metadata() | {"has_sum": True}
         return meta
 
     async def async_added_to_hass(self):
         await super().async_added_to_hass()
-        await fixes.async_fix_statistics(self.hass, self.get_statatistic_metadata())
+
+        #
+        # In 2.0 branch we f**ked statistiscs.
+        # Remove in future 3.0 series.
+        # Don't set state_class attributes for historical sensors!
+        #
+        await fixes.async_fix_statistics(self.hass, self.get_statistic_metadata())
 
     async def async_calculate_statistic_data(
         self, hist_states: list[HistoricalState], *, latest: dict | None
     ) -> list[StatisticData]:
-
         #
         # Filter out invalid states
         #
@@ -120,7 +125,7 @@ class StatisticsMixin(HistoricalSensor):
         hist_states = [x for x in hist_states if x.state not in (0, None)]
         if len(hist_states) != n_original_hist_states:
             _LOGGER.warning(
-                f"{self.statatistic_id}: "
+                f"{self.statistic_id}: "
                 f"found some weird values in historical statistics"
             )
 
@@ -138,13 +143,6 @@ class StatisticsMixin(HistoricalSensor):
                 return hist_state.dt.replace(minute=0, second=0, microsecond=0)
 
         #
-        # Somehow, somewhere, Home Assistant writes invalid statistics
-        # FIXME: integrate into homeassistant_historical_sensor and remove
-        #
-
-        await fixes.async_fix_statistics(self.hass, self.get_statatistic_metadata())
-
-        #
         # Ignore supplied 'lastest' and fetch again from recorder
         # FIXME: integrate into homeassistant_historical_sensor and remove
         #
@@ -153,7 +151,7 @@ class StatisticsMixin(HistoricalSensor):
             ret = statistics.get_last_statistics(
                 self.hass,
                 1,
-                self.statatistic_id,
+                self.statistic_id,
                 convert_units=True,
                 types={"last_reset", "max", "mean", "min", "state", "sum"},
             )
@@ -161,13 +159,13 @@ class StatisticsMixin(HistoricalSensor):
                 return None
 
             try:
-                return ret[self.statatistic_id][0]
+                return ret[self.statistic_id][0]
             except (KeyError, IndexError):
                 _LOGGER.debug(
-                    f"{self.statatistic_id}: [bug] found last statistics but doesn't "
+                    f"{self.statistic_id}: [bug] found last statistics but doesn't "
                     f"have matching key or values: {ret!r}"
                 )
-                return None
+                return []
 
         latest = await recorder.get_instance(self.hass).async_add_executor_job(
             get_last_statistics
@@ -183,7 +181,7 @@ class StatisticsMixin(HistoricalSensor):
             total_accumulated = extract_last_sum(latest)
         except (KeyError, ValueError):
             _LOGGER.error(
-                f"{self.statatistic_id}: [bug] statistics broken (lastest={latest!r})"
+                f"{self.statistic_id}: [bug] statistics broken (lastest={latest!r})"
             )
             return []
 
@@ -192,7 +190,7 @@ class StatisticsMixin(HistoricalSensor):
         )
 
         _LOGGER.debug(
-            f"{self.statatistic_id}: "
+            f"{self.statistic_id}: "
             + f"calculating statistics using {total_accumulated} as base accumulated "
             + f"(registed at {start_point_local_dt})"
         )
@@ -301,7 +299,6 @@ class HistoricalConsumption(
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self._attr_device_class = SensorDeviceClass.ENERGY
-        self._attr_state_class = SensorStateClass.MEASUREMENT
         self._attr_native_unit_of_measurement = UnitOfEnergy.KILO_WATT_HOUR
         self._attr_entity_registry_enabled_default = False
         self._attr_state = None
@@ -325,7 +322,6 @@ class HistoricalGeneration(
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self._attr_device_class = SensorDeviceClass.ENERGY
-        self._attr_state_class = SensorStateClass.MEASUREMENT
         self._attr_native_unit_of_measurement = UnitOfEnergy.KILO_WATT_HOUR
         self._attr_entity_registry_enabled_default = False
         self._attr_state = None
@@ -347,7 +343,6 @@ class HistoricalPowerDemand(HistoricalSensorMixin, IDeEntity, SensorEntity):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self._attr_device_class = SensorDeviceClass.POWER
-        self._attr_state_class = SensorStateClass.MEASUREMENT
         self._attr_native_unit_of_measurement = UnitOfPower.WATT
         self._attr_entity_registry_enabled_default = False
         self._attr_state = None

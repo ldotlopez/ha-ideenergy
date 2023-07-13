@@ -1,0 +1,6 @@
+[tool.isort]
+profile = "black"
+
+
+[tool.pyupgrade]
+addopts = "--py310-plus"

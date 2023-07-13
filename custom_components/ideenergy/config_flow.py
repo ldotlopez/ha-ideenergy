@@ -20,14 +20,13 @@
 import os
 from typing import Any
 
+import ideenergy
 import voluptuous as vol
 from homeassistant import config_entries
 from homeassistant.const import CONF_PASSWORD, CONF_USERNAME
 from homeassistant.core import callback  # noqa: F401
 from homeassistant.data_entry_flow import FlowResult
 from homeassistant.helpers.aiohttp_client import async_create_clientsession
-
-import ideenergy
 
 from . import _LOGGER
 from .const import CONF_CONTRACT, CONFIG_ENTRY_VERSION, DOMAIN
