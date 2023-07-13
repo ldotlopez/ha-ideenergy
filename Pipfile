@@ -4,6 +4,7 @@ verify_ssl = true
 name = "pypi"
 
 [packages]
+homeassistant-historical-sensor = "==2.0.0b0"
 
 [dev-packages]
 ipython = "*"
