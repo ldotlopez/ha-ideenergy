@@ -28,8 +28,10 @@ Steps to reproduce the behavior:
 - ideenergy integration version [e.g 1.0.0, main]
 - Instalation method [HassOS, docker, pip, pipenv]
 - i-de.es advanced user [yes / no]
-- Did I read the [FAQ](https://github.com/ldotlopez/ha-ideenergy/blob/main/FAQ.md)?: no
+- Did I read the [FAQ](https://github.com/ldotlopez/ha-ideenergy/blob/main/FAQ.md)? (You should): no
 - Did I enable debug before posting any log as it's required? (see Logs section below): no
+
+_You **must** say "yes" to the FAQ and debug questions_
 
 **Expected behavior**
 A clear and concise description of what you expected to happen.
