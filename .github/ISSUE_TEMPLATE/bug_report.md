@@ -29,6 +29,7 @@ Steps to reproduce the behavior:
 - Instalation method [HassOS, docker, pip, pipenv]
 - i-de.es advanced user [yes / no]
 - Did I read the [FAQ](https://github.com/ldotlopez/ha-ideenergy/blob/main/FAQ.md)?: no
+- Did I enable debug before posting any log as it's required? (see Logs section below): no
 
 **Expected behavior**
 A clear and concise description of what you expected to happen.
