@@ -3,10 +3,13 @@ requires = ["setuptools>=40.8.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [tool.black]
-target-version = ['py310']
+target-version = ['py311']
 
 [tool.isort]
 profile = "black"
 
 [tool.mypy]
 files = ["custom_components/ideenergy"]
+
+[tool.pyupgrade]
+addopts = "--py311-plus"
