@@ -4,15 +4,16 @@ verify_ssl = true
 name = "pypi"
 
 [packages]
-homeassistant-historical-sensor = "==2.0.0b0"
 
 [dev-packages]
 ipython = "*"
 ipdb = "*"
-homeassistant-historical-sensor = {editable = true, path = "./../ha-historical-sensor"}
 sqlalchemy = "*"
 pre-commit = "*"
-homeassistant = ">= 2023.6.0"
+homeassistant = ">= 2023.11.0"
+mypy = "*"
+flake8 = "*"
+black = "*"
 
 [requires]
 python_version = "3"
