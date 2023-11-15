@@ -19,7 +19,7 @@
 import enum
 import logging
 from datetime import datetime, timedelta, timezone
-from typing import Any
+from typing import Any, TypedDict
 
 import ideenergy
 from homeassistant.core import dt_util
@@ -49,21 +49,29 @@ class DataSetType(enum.IntFlag):
 
 _LOGGER = logging.getLogger(__name__)
 
-_DEFAULT_COORDINATOR_DATA: dict[str, Any] = {
-    DATA_ATTR_MEASURE_ACCUMULATED: None,
-    DATA_ATTR_MEASURE_INSTANT: None,
-    DATA_ATTR_HISTORICAL_CONSUMPTION: {
-        "accumulated": None,
-        "accumulated-co2": None,
-        "historical": [],
-    },
-    DATA_ATTR_HISTORICAL_GENERATION: {
-        "accumulated": None,
-        "accumulated-co2": None,
-        "historical": [],
-    },
-    DATA_ATTR_HISTORICAL_POWER_DEMAND: [],
-}
+# _DEFAULT_COORDINATOR_DATA: dict[str, Any] = {
+#     DATA_ATTR_MEASURE_ACCUMULATED: None,
+#     DATA_ATTR_MEASURE_INSTANT: None,
+#     DATA_ATTR_HISTORICAL_CONSUMPTION: {
+#         "accumulated": None,
+#         "accumulated-co2": None,
+#         "historical": [],
+#     },
+#     DATA_ATTR_HISTORICAL_GENERATION: {
+#         "accumulated": None,
+#         "accumulated-co2": None,
+#         "historical": [],
+#     },
+#     DATA_ATTR_HISTORICAL_POWER_DEMAND: [],
+# }
+
+
+class CoordinatorData(TypedDict):
+    DATA_ATTR_MEASURE_ACCUMULATED: int | None
+    DATA_ATTR_MEASURE_INSTANT: float | None
+    DATA_ATTR_HISTORICAL_CONSUMPTION: ideenergy.HistoricalConsumption | None
+    DATA_ATTR_HISTORICAL_GENERATION: ideenergy.HistoricalGeneration | None
+    DATA_ATTR_HISTORICAL_POWER_DEMAND: ideenergy.HistoricalPowerDemand | None
 
 
 class IDeCoordinator(DataUpdateCoordinator):
@@ -78,6 +86,16 @@ class IDeCoordinator(DataUpdateCoordinator):
             f"{api.username}/{api._contract} coordinator" if api else "i-de coordinator"
         )
         super().__init__(hass, _LOGGER, name=name, update_interval=update_interval)
+        self.data: CoordinatorData = {  # type: ignore[assignment]
+            k: None
+            for k in [
+                DATA_ATTR_MEASURE_ACCUMULATED,
+                DATA_ATTR_MEASURE_INSTANT,
+                DATA_ATTR_HISTORICAL_CONSUMPTION,
+                DATA_ATTR_HISTORICAL_GENERATION,
+                DATA_ATTR_HISTORICAL_POWER_DEMAND,
+            ]
+        }
 
         self.api = api
         self.barriers = barriers
@@ -86,20 +104,6 @@ class IDeCoordinator(DataUpdateCoordinator):
         self.platforms: list[str] = []
 
         self.sensors: list[IDeEntity] = []
-
-    def register_sensor(self, sensor: IDeEntity) -> None:
-        self.sensors.append(sensor)
-        _LOGGER.debug(f"Registered sensor '{sensor.__class__.__name__}'")
-
-    def unregister_sensor(self, sensor: IDeEntity) -> None:
-        _LOGGER.debug(f"Unregistered sensor '{sensor.__class__.__name__}'")
-        self.sensors.remove(sensor)
-
-    def update_internal_data(self, data: dict[str, Any]):
-        if self.data is None:  # type: ignore[has-type]
-            self.data = _DEFAULT_COORDINATOR_DATA
-
-        self.data.update(data)
 
     async def _async_update_data(self):
         """Fetch data from API endpoint.
@@ -128,7 +132,7 @@ class IDeCoordinator(DataUpdateCoordinator):
 
         updated_data = await self._async_update_data_raw(datasets=ds)
 
-        data = (self.data or _DEFAULT_COORDINATOR_DATA) | updated_data
+        data = self.data | updated_data
         return data
 
     async def _async_update_data_raw(
@@ -202,7 +206,7 @@ class IDeCoordinator(DataUpdateCoordinator):
             except Exception as e:
                 _LOGGER.debug(
                     f"update error for {dataset.name}: "
-                    f"**FIXME** handle {dataset.name} raised exception: {e!r}"
+                    + f"**FIXME** handle {dataset.name} raised exception: {e!r}"
                 )
                 continue
 
@@ -215,6 +219,17 @@ class IDeCoordinator(DataUpdateCoordinator):
         # await asyncio.sleep(delay)
 
         return data
+
+    def register_sensor(self, sensor: IDeEntity) -> None:
+        self.sensors.append(sensor)
+        _LOGGER.debug(f"Registered sensor '{sensor.__class__.__name__}'")
+
+    def unregister_sensor(self, sensor: IDeEntity) -> None:
+        self.sensors.remove(sensor)
+        _LOGGER.debug(f"Unregistered sensor '{sensor.__class__.__name__}'")
+
+    def update_internal_data(self, data: dict[str, Any]):
+        self.data = self.data | data  # type: ignore[assignment]
 
     async def get_direct_reading_data(self) -> dict[str, int | float]:
         data = await self.api.get_measure()

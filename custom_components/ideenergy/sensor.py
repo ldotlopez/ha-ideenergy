@@ -52,6 +52,7 @@ from homeassistant.helpers.restore_state import RestoreEntity
 from homeassistant.helpers.typing import DiscoveryInfoType
 from homeassistant.util import dt as dtutil
 from homeassistant_historical_sensor import HistoricalSensor, HistoricalState
+from ideenergy.types import PeriodValue
 
 from .const import DOMAIN
 from .datacoordinator import (
@@ -256,9 +257,6 @@ class AccumulatedConsumption(RestoreEntity, IDeEntity, SensorEntity):
 
     @property
     def state(self):
-        if self.coordinator.data is None:
-            return None
-
         return self.coordinator.data[DATA_ATTR_MEASURE_ACCUMULATED]
 
     @callback
@@ -287,9 +285,6 @@ class InstantPowerDemand(RestoreEntity, IDeEntity, SensorEntity):
 
     @property
     def state(self):
-        if self.coordinator.data is None:
-            return None
-
         return self.coordinator.data[DATA_ATTR_MEASURE_INSTANT]
 
     @callback
@@ -332,10 +327,11 @@ class HistoricalConsumption(
 
     @property
     def historical_states(self):
-        ret = historical_states_from_historical_api_data(
-            self.coordinator.data[DATA_ATTR_HISTORICAL_CONSUMPTION]["historical"]
-        )
+        if (data := self.coordinator.data[DATA_ATTR_HISTORICAL_CONSUMPTION]) is None:
+            # FIXME: This should be None, fix ha-historical-sensor
+            return []
 
+        ret = historical_states_from_period_values(data.periods)
         return ret
 
 
@@ -368,10 +364,11 @@ class HistoricalGeneration(
 
     @property
     def historical_states(self):
-        ret = historical_states_from_historical_api_data(
-            self.coordinator.data[DATA_ATTR_HISTORICAL_GENERATION]["historical"]
-        )
+        if (data := self.coordinator.data[DATA_ATTR_HISTORICAL_GENERATION]) is None:
+            # FIXME: This should be None, fix ha-historical-sensor
+            return []
 
+        ret = historical_states_from_period_values(data.periods)
         return ret
 
 
@@ -389,22 +386,17 @@ class HistoricalPowerDemand(HistoricalSensorMixin, IDeEntity, SensorEntity):
 
     @property
     def historical_states(self):
-        def _convert_item(item):
-            # [
-            #     {
-            #         "dt": datetime.datetime(2021, 4, 24, 13, 0),
-            #         "value": 3012.0
-            #     },
-            #     ...
-            # ]
+        if (data := self.coordinator.data[DATA_ATTR_HISTORICAL_POWER_DEMAND]) is None:
+            # FIXME: This should be None, fix ha-historical-sensor
+            return []
+
+        def demand_at_instant_as_historical_state(item):
             return HistoricalState(
-                state=item["value"] / 1000,
-                dt=item["dt"].replace(tzinfo=MAINLAND_SPAIN_ZONEINFO),
+                state=item.value / 1000,
+                dt=item.dt.replace(tzinfo=MAINLAND_SPAIN_ZONEINFO),
             )
 
-        data = self.coordinator.data[DATA_ATTR_HISTORICAL_POWER_DEMAND]
-        ret = [_convert_item(item) for item in data]
-
+        ret = [demand_at_instant_as_historical_state(x) for x in data.demands]
         return ret
 
 
@@ -451,6 +443,24 @@ def historical_states_from_historical_api_data(
         )
 
     return [_convert_item(item) for item in data or []]
+
+
+def historical_states_from_period_values(
+    period_values: list[PeriodValue],
+) -> list[HistoricalState]:
+    def fn():
+        for item in period_values:
+            # FIXME: What about canary islands?
+            dt = item.end.replace(tzinfo=MAINLAND_SPAIN_ZONEINFO)
+            last_reset = item.start.replace(tzinfo=MAINLAND_SPAIN_ZONEINFO)
+
+            yield HistoricalState(
+                state=item.value / 1000,
+                dt=dt,
+                attributes={"last_reset": last_reset},
+            )
+
+    return list(fn())
 
 
 async def async_get_last_state_safe(
