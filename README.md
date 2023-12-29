@@ -75,7 +75,7 @@ It also necessary to have an "Advanced User" profile. Should you not have one al
 
 1. Download/clone this repository: [https://github.com/ldotlopez/ha-ideenergy](https://github.com/ldotlopez/ha-ideenergy/)
 
-2. Copy the `custom_components/idergy` folder into your custom_components folder into your HA installation
+2. Copy the `custom_components/ideenergy` folder into your custom_components folder into your HA installation
 
 3. Restart HA
 
