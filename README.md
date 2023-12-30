@@ -29,8 +29,7 @@ This integration requires an **advanced** user profile on i-DE website.
 
 * Support for multiple contracts (service points).
 
-* Configuration through [Home Assistant Interface](https://developers.home-assistant.io/docs/
-config_entries_options_flow_handler) without the need to edit YAML files.
+* Configuration through [Home Assistant Interface](https://developers.home-assistant.io/docs/config_entries_options_flow_handler) without the need to edit YAML files.
 
 * Update algorithm to read the meter near the end of each hourly period (between minute 50 and 59)
 with a better representation of consumption in the Home Assistant energy panel.
@@ -49,7 +48,7 @@ It also necessary to have an "Advanced User" profile. Should you not have one al
 
 ### Using [HACS](https://hacs.xyz/) (recommended)
 
-1. Copy this repository URL: (https://github.com/ldotlopez/ha-ideenergy)[https://github.com/ldotlopez/ha-ideenergy/]
+1. Copy this repository URL: [https://github.com/ldotlopez/ha-ideenergy](https://github.com/ldotlopez/ha-ideenergy/)
 
 2. In the HACS section, add this repository as a custom one:
 
@@ -74,9 +73,9 @@ It also necessary to have an "Advanced User" profile. Should you not have one al
 
 ### Manually
 
-1. Download/clone this repository: (https://github.com/ldotlopez/ha-ideenergy)[https://github.com/ldotlopez/ha-ideenergy/]
+1. Download/clone this repository: [https://github.com/ldotlopez/ha-ideenergy](https://github.com/ldotlopez/ha-ideenergy/)
 
-2. Copy the [custom_components/ide](custom_components/ideenergy) folder into your custom_components folder into your HA installation
+2. Copy the `custom_components/ideenergy` folder into your custom_components folder into your HA installation
 
 3. Restart HA
 
