@@ -44,7 +44,7 @@ Además es necesario disponer del perfil de "Usuario avanzado". Si no se dispone
 
 ### Usando [HACS](https://hacs.xyz/) (recomendado)
 
-1. Copia la dirección de este repositorio: (https://github.com/ldotlopez/ha-ideenergy)[https://github.com/ldotlopez/ha-ideenergy/]
+1. Copia la dirección de este repositorio: [https://github.com/ldotlopez/ha-ideenergy](https://github.com/ldotlopez/ha-ideenergy/)
 
 2. Añade este repositorio en HACS como "repositorio manual":
 
@@ -71,7 +71,7 @@ A través de custom_components o [HACS](https://hacs.xyz/)
 
 1. Descarga o clona este repositorio: [https://github.com/ldotlopez/ha-ideenergy](https://github.com/ldotlopez/ha-ideenergy)
 
-2. Copia la carpeta [custom_components/ide](custom_components/ideenergy) en tu carpeta `custom_components` de tu instalación de Home Assistant.
+2. Copia la carpeta `custom_components/ideenergy` en tu carpeta `custom_components` de tu instalación de Home Assistant.
 
 3. Reinicia Home Assistant
 4. Configura la integración
