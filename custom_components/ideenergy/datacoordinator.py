@@ -21,9 +21,10 @@ import logging
 from datetime import datetime, timedelta, timezone
 from typing import Any, TypedDict
 
-import ideenergy
 from homeassistant.core import dt_util
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
+
+import ideenergy
 
 from .barrier import Barrier, BarrierDeniedError
 from .const import (
@@ -33,6 +34,7 @@ from .const import (
     DATA_ATTR_MEASURE_ACCUMULATED,
     DATA_ATTR_MEASURE_INSTANT,
     HISTORICAL_PERIOD_LENGHT,
+    LOCAL_TZ,
 )
 from .entity import IDeEntity
 
@@ -242,7 +244,9 @@ class IDeCoordinator(DataUpdateCoordinator):
     async def get_historical_consumption_data(self) -> Any:
         end = datetime.today()
         start = end - HISTORICAL_PERIOD_LENGHT
+
         data = await self.api.get_historical_consumption(start=start, end=end)
+        data.periods = [normalize_period_item(x) for x in data.periods]
 
         return {DATA_ATTR_HISTORICAL_CONSUMPTION: data}
 
@@ -251,9 +255,25 @@ class IDeCoordinator(DataUpdateCoordinator):
         start = end - HISTORICAL_PERIOD_LENGHT
         data = await self.api.get_historical_generation(start=start, end=end)
 
+        raise NotImplementedError()
+
         return {DATA_ATTR_HISTORICAL_GENERATION: data}
 
     async def get_historical_power_demand_data(self) -> Any:
         data = await self.api.get_historical_power_demand()
+        data.demands = [normalize_dated_item(x) for x in data.demands]
 
         return {DATA_ATTR_HISTORICAL_POWER_DEMAND: data}
+
+
+def normalize_period_item(item):
+    item.start = item.start.replace(tzinfo=LOCAL_TZ)
+    item.end = item.end.replace(tzinfo=LOCAL_TZ)
+
+    return item
+
+
+def normalize_dated_item(item):
+    item.dt = item.dt.replace(tzinfo=LOCAL_TZ)
+
+    return item

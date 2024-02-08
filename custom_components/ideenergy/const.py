@@ -17,10 +17,13 @@
 
 
 from datetime import timedelta
+from zoneinfo import ZoneInfo
 
 DOMAIN = "ideenergy"
 
 CONF_CONTRACT = "contract"
+
+LOCAL_TZ = ZoneInfo("Europe/Madrid")
 
 MEASURE_MAX_AGE = 60 * 50  # Fifty minutes
 MAX_RETRIES = 3

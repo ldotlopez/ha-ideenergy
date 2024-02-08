@@ -24,15 +24,13 @@
 # Check sensor.SensorEntityDescription
 # https://github.com/home-assistant/core/blob/dev/homeassistant/components/sensor/__init__.py
 
-
 import itertools
 import logging
 from collections.abc import Callable
-from datetime import datetime, timedelta
+from datetime import datetime
+from math import ceil
 from typing import Any
 
-from homeassistant.components import recorder
-from homeassistant.components.recorder import statistics
 from homeassistant.components.recorder.models import StatisticData, StatisticMetaData
 from homeassistant.components.sensor import (
     SensorDeviceClass,
@@ -50,9 +48,8 @@ from homeassistant.core import HomeAssistant, callback, dt_util
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.restore_state import RestoreEntity
 from homeassistant.helpers.typing import DiscoveryInfoType
-from homeassistant.util import dt as dtutil
 from homeassistant_historical_sensor import HistoricalSensor, HistoricalState
-from ideenergy.types import PeriodValue
+from homeassistant_historical_sensor import timemachine as tm
 
 from .const import DOMAIN
 from .datacoordinator import (
@@ -64,11 +61,9 @@ from .datacoordinator import (
     DataSetType,
 )
 from .entity import IDeEntity
-from .fixes import async_fix_statistics
 
 PLATFORM = "sensor"
 
-MAINLAND_SPAIN_ZONEINFO = dtutil.zoneinfo.ZoneInfo("Europe/Madrid")
 _LOGGER = logging.getLogger(__name__)
 
 
@@ -105,17 +100,6 @@ class StatisticsMixin(HistoricalSensor):
 
         return meta
 
-    async def async_added_to_hass(self):
-        await super().async_added_to_hass()
-
-        #
-        # In 2.0 branch we f**ked statistiscs.
-        # Don't set state_class attributes for historical sensors!
-        #
-        # FIXME: Remove in future 3.0 series.
-        #
-        await async_fix_statistics(self.hass, self.get_statistic_metadata())
-
     async def async_calculate_statistic_data(
         self, hist_states: list[HistoricalState], *, latest: dict | None
     ) -> list[StatisticData]:
@@ -136,50 +120,19 @@ class StatisticsMixin(HistoricalSensor):
         #
 
         def hour_block_for_hist_state(hist_state: HistoricalState) -> datetime:
-            # XX:00:00 states belongs to previous hour block
-            if hist_state.dt.minute == 0 and hist_state.dt.second == 0:
-                dt = hist_state.dt - timedelta(hours=1)
-                return dt.replace(minute=0, second=0, microsecond=0)
+            secs_per_hour = 60 * 60
 
-            else:
-                return hist_state.dt.replace(minute=0, second=0, microsecond=0)
+            ts = ceil(hist_state.ts)
+            block = ts // secs_per_hour
+            leftover = ts % secs_per_hour
 
-        #
-        # Ignore supplied 'lastest' and fetch again from recorder
-        # FIXME: integrate into homeassistant_historical_sensor and remove
-        #
+            if leftover == 0:
+                block = block - 1
 
-        def get_last_statistics():
-            ret = statistics.get_last_statistics(
-                self.hass,
-                1,
-                self.statistic_id,
-                convert_units=True,
-                types={"sum"},
-            )
+            return block * secs_per_hour
 
-            # ret can be none or {}
-            if not ret:
-                return None
-
-            try:
-                return ret[self.statistic_id][0]
-
-            except KeyError:
-                # No stats found
-                return None
-
-            except IndexError:
-                # What?
-                _LOGGER.error(
-                    f"{self.statatistic_id}: "
-                    + "[bug] found last statistics key but doesn't have any value! "
-                    + f"({ret!r})"
-                )
-                raise
-
-        latest = await recorder.get_instance(self.hass).async_add_executor_job(
-            get_last_statistics
+        latest = await tm.hass_get_last_statistic(
+            self.hass, self.get_statistic_metadata()
         )
 
         #
@@ -212,7 +165,7 @@ class StatisticsMixin(HistoricalSensor):
 
         ret = []
 
-        for dt, collection_it in itertools.groupby(
+        for hour_block, collection_it in itertools.groupby(
             hist_states, key=hour_block_for_hist_state
         ):
             collection = list(collection_it)
@@ -223,7 +176,7 @@ class StatisticsMixin(HistoricalSensor):
 
             ret.append(
                 StatisticData(
-                    start=dt,
+                    start=dt_util.utc_from_timestamp(hour_block),
                     state=hour_accumulated,
                     # mean=hour_mean,
                     sum=total_accumulated,
@@ -331,7 +284,10 @@ class HistoricalConsumption(
             # FIXME: This should be None, fix ha-historical-sensor
             return []
 
-        ret = historical_states_from_period_values(data.periods)
+        ret = [
+            HistoricalState(state=x.value, ts=x.end.timestamp()) for x in data.periods
+        ]
+
         return ret
 
 
@@ -368,8 +324,7 @@ class HistoricalGeneration(
             # FIXME: This should be None, fix ha-historical-sensor
             return []
 
-        ret = historical_states_from_period_values(data.periods)
-        return ret
+        return [HistoricalState(state=state, ts=ts) for (ts, state) in data]
 
 
 class HistoricalPowerDemand(HistoricalSensorMixin, IDeEntity, SensorEntity):
@@ -390,13 +345,11 @@ class HistoricalPowerDemand(HistoricalSensorMixin, IDeEntity, SensorEntity):
             # FIXME: This should be None, fix ha-historical-sensor
             return []
 
-        def demand_at_instant_as_historical_state(item):
-            return HistoricalState(
-                state=item.value / 1000,
-                dt=item.dt.replace(tzinfo=MAINLAND_SPAIN_ZONEINFO),
-            )
+        ret = [
+            HistoricalState(state=x.value / 1000, ts=x.dt.timestamp())
+            for x in data.demands
+        ]
 
-        ret = [demand_at_instant_as_historical_state(x) for x in data.demands]
         return ret
 
 
@@ -426,41 +379,6 @@ async def async_setup_entry(
         ),
     ]
     async_add_devices(sensors)
-
-
-def historical_states_from_historical_api_data(
-    data: list[dict] | None = None,
-) -> list[HistoricalState]:
-    def _convert_item(item):
-        # FIXME: What about canary islands?
-        dt = item["end"].replace(tzinfo=MAINLAND_SPAIN_ZONEINFO)
-        last_reset = item["start"].replace(tzinfo=MAINLAND_SPAIN_ZONEINFO)
-
-        return HistoricalState(
-            state=item["value"] / 1000,
-            dt=dt,
-            attributes={"last_reset": last_reset},
-        )
-
-    return [_convert_item(item) for item in data or []]
-
-
-def historical_states_from_period_values(
-    period_values: list[PeriodValue],
-) -> list[HistoricalState]:
-    def fn():
-        for item in period_values:
-            # FIXME: What about canary islands?
-            dt = item.end.replace(tzinfo=MAINLAND_SPAIN_ZONEINFO)
-            last_reset = item.start.replace(tzinfo=MAINLAND_SPAIN_ZONEINFO)
-
-            yield HistoricalState(
-                state=item.value / 1000,
-                dt=dt,
-                attributes={"last_reset": last_reset},
-            )
-
-    return list(fn())
 
 
 async def async_get_last_state_safe(

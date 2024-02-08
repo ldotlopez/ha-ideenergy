@@ -26,8 +26,8 @@ from homeassistant.components import recorder
 from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from homeassistant.util import slugify
-from homeassistant_historical_sensor.recorderutil import (
-    delete_entity_invalid_states,
+from homeassistant_historical_sensor.timemachine import (
+    delete_invalid_states,
     hass_recorder_session,
 )
 
@@ -96,7 +96,7 @@ class IDeEntity(CoordinatorEntity):
 
         def fn():
             with hass_recorder_session(self.hass) as session:
-                return delete_entity_invalid_states(session, self)
+                return delete_invalid_states(session, self)
 
         return await recorder.get_instance(self.hass).async_add_executor_job(fn)
 
