@@ -23,7 +23,7 @@ from datetime import timedelta
 
 import ideenergy
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import CONF_PASSWORD, CONF_USERNAME
+from homeassistant.const import CONF_PASSWORD, CONF_USERNAME, Platform
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryNotReady
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
@@ -43,7 +43,7 @@ from .const import (
 from .datacoordinator import DataSetType, IDeCoordinator
 from .updates import update_integration
 
-PLATFORMS: list[str] = ["sensor"]
+PLATFORMS: list[str] = [Platform.SENSOR]
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -100,9 +100,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     for platform in PLATFORMS:
         if entry.options.get(platform, True):
             coordinator.platforms.append(platform)
-            hass.async_create_task(
-                hass.config_entries.async_forward_entry_setup(entry, platform)
-            )
+    await hass.config_entries.async_forward_entry_setups(entry,coordinator.platforms)
 
     entry.async_on_unload(entry.add_update_listener(async_reload_entry))
 
