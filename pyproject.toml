@@ -1,9 +1,10 @@
-[build-system]
-requires = ["setuptools>=40.8.0", "wheel"]
-build-backend = "setuptools.build_meta"
+[project]
+name = "ha-ideenergy"
+version = "2025.2.0"
+requires-python = ">=3.13"
 
 [tool.black]
-target-version = ['py311']
+target-version = ['py313']
 
 [tool.isort]
 profile = "black"
@@ -12,4 +13,13 @@ profile = "black"
 files = ["custom_components/ideenergy"]
 
 [tool.pyupgrade]
-addopts = "--py311-plus"
+addopts = "--py313-plus"
+
+[dependency-groups]
+dev = [
+    "homeassistant>=2025.2.0",
+    "ipdb>=0.13.13",
+    "ipython>=8.32.0",
+    "pre-commit>=4.1.0",
+    "sqlalchemy>=2.0.37",
+]
