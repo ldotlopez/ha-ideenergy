@@ -166,23 +166,7 @@ class IDeCoordinator(DataUpdateCoordinator):
 
             # API calls and handle exceptions
             try:
-                if dataset is DataSetType.MEASURE:
-                    data.update(await self.get_direct_reading_data())
-
-                elif dataset is DataSetType.HISTORICAL_CONSUMPTION:
-                    data.update(await self.get_historical_consumption_data())
-
-                elif dataset is DataSetType.HISTORICAL_GENERATION:
-                    data.update(await self.get_historical_generation_data())
-
-                elif dataset is DataSetType.HISTORICAL_POWER_DEMAND:
-                    data.update(await self.get_historical_power_demand_data())
-
-                else:
-                    _LOGGER.debug(
-                        f"update ignored for {dataset.name}: not implemented yet"
-                    )
-                    continue
+                data.update(await self._fetch_dataset(dataset))
 
             except UnicodeDecodeError:
                 _LOGGER.debug(
@@ -191,11 +175,27 @@ class IDeCoordinator(DataUpdateCoordinator):
                 continue
 
             except ideenergy.RequestFailedError as e:
-                _LOGGER.debug(
-                    f"update error for {dataset.name}: "
-                    + f"{e.response.reason} ({e.response.status})"
-                )
-                continue
+                if e.response.status == 403:
+                    _LOGGER.debug(
+                        f"update error for {dataset.name}: 403 forbidden, "
+                        "forcing re-login and retrying"
+                    )
+                    try:
+                        self.api._login_ts = None
+                        await self.api.login()
+                        data.update(await self._fetch_dataset(dataset))
+                    except Exception as retry_err:
+                        _LOGGER.debug(
+                            f"update error for {dataset.name}: "
+                            f"retry after re-login also failed: {retry_err!r}"
+                        )
+                        continue
+                else:
+                    _LOGGER.debug(
+                        f"update error for {dataset.name}: "
+                        + f"{e.response.reason} ({e.response.status})"
+                    )
+                    continue
 
             except ideenergy.CommandError as e:
                 _LOGGER.debug(
@@ -231,6 +231,18 @@ class IDeCoordinator(DataUpdateCoordinator):
     def update_internal_data(self, data: dict[str, Any]):
         self.data = self.data | data  # type: ignore[assignment]
 
+    async def _fetch_dataset(self, dataset: DataSetType) -> dict[str, Any]:
+        if dataset is DataSetType.MEASURE:
+            return await self.get_direct_reading_data()
+        elif dataset is DataSetType.HISTORICAL_CONSUMPTION:
+            return await self.get_historical_consumption_data()
+        elif dataset is DataSetType.HISTORICAL_GENERATION:
+            return await self.get_historical_generation_data()
+        elif dataset is DataSetType.HISTORICAL_POWER_DEMAND:
+            return await self.get_historical_power_demand_data()
+        else:
+            raise ValueError(f"Unknown dataset: {dataset.name}")
+
     async def get_direct_reading_data(self) -> dict[str, int | float]:
         data = await self.api.get_measure()
 
@@ -249,12 +261,6 @@ class IDeCoordinator(DataUpdateCoordinator):
     async def get_historical_generation_data(self) -> Any:
         end = datetime.today()
         start = end - HISTORICAL_PERIOD_LENGHT
-
-        # Workaround: ensure auth before calling get_historical_generation
-        # because it's missing the @auth_required decorator in ideenergy<=2.0.0rc1
-        if self.api._auto_renew_user_session and not self.api.is_logged:
-            await self.api.login()
-
         data = await self.api.get_historical_generation(start=start, end=end)
 
         return {DATA_ATTR_HISTORICAL_GENERATION: data}
