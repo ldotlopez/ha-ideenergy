@@ -54,8 +54,15 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     try:
         contract_details = await api.get_contract_details()
     except ideenergy.client.ClientError as e:
-        _LOGGER.debug(f"Unable to initialize integration: {e}")
-        return False
+        try:
+            err_msg = f"{e.response.status} - {e.response.reason}" if hasattr(e, "response") else repr(e)
+        except Exception:
+            err_msg = repr(e)
+        _LOGGER.warning(f"Unable to initialize integration: {err_msg}")
+        raise ConfigEntryNotReady(f"i-DE API unavailable: {err_msg}") from e
+    except Exception as e:
+        _LOGGER.warning(f"Unexpected error initializing integration: {e!r}")
+        raise ConfigEntryNotReady(f"Unexpected error: {e!r}") from e
 
     device_info = IDeEnergyDeviceInfo(contract_details)
 
@@ -148,7 +155,11 @@ async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry):
     try:
         contract_details = await api.get_contract_details()
     except ideenergy.client.ClientError as e:
-        _LOGGER.debug(f"Unable to initialize integration: {e}")
+        try:
+            err_msg = f"{e.response.status} - {e.response.reason}" if hasattr(e, "response") else repr(e)
+        except Exception:
+            err_msg = repr(e)
+        _LOGGER.warning(f"Unable to migrate integration: {err_msg}")
         return False
 
     update_integration(hass, entry, IDeEnergyDeviceInfo(contract_details))
