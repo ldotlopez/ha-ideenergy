@@ -23,6 +23,12 @@ class ForceUpdateButton(IDeEntity, ButtonEntity):
         super().__init__(*args, **kwargs)
         self._attr_icon = "mdi:refresh"
 
+    async def async_added_to_hass(self) -> None:
+        # Skip IDeEntity's async_delete_invalid_states (not applicable to buttons)
+        # but still register with the coordinator
+        await super(IDeEntity, self).async_added_to_hass()
+        self.coordinator.register_sensor(self)
+
     async def async_press(self) -> None:
         _LOGGER.debug("Force data update requested")
 
