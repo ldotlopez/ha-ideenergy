@@ -237,10 +237,11 @@ class StatisticsMixin(HistoricalSensor):
             dt_util.utc_from_timestamp(latest.get("start", 0) if latest else 0)
         )
 
-        _LOGGER.debug(
+        _LOGGER.warning(
             f"{self.statistic_id}: "
-            + f"calculating statistics using {total_accumulated} as base accumulated "
-            + f"(registed at {start_point_local_dt})"
+            f"calculating statistics: {len(hist_states)} states, "
+            f"base_accumulated={total_accumulated}, "
+            f"start_point={start_point_local_dt}"
         )
 
         #
@@ -266,6 +267,10 @@ class StatisticsMixin(HistoricalSensor):
                     sum=total_accumulated,
                 )
             )
+
+        _LOGGER.warning(
+            f"{self.statistic_id}: calculated {len(ret)} statistic points"
+        )
 
         return ret
 
