@@ -123,14 +123,6 @@ try:
     _hhs_patches._stringify_state = _patched_stringify_state
     _hhs_sensor._build_attributes = _patched_build_attributes
 
-    # Disable _write_recorder_states — it writes to the 'states' table which
-    # causes StaleDataError when rows overlap with existing entries.
-    # Only statistics writes (via async_import_statistics) are needed for
-    # the Energy Dashboard. The sensor state is always "Unknown" by design.
-    def _noop_write_recorder_states(self, *args, **kwargs):
-        pass
-
-    _hhs_sensor.HistoricalSensor._write_recorder_states = _noop_write_recorder_states
 except Exception:
     pass
 

@@ -91,9 +91,6 @@ class HistoricalSensorMixin(HistoricalSensor):
 
     @callback
     def _handle_coordinator_update(self) -> None:
-        # Only write when the coordinator has actually fetched new data,
-        # not on every polling cycle. This prevents StaleDataError from
-        # rewriting the same states to the recorder.
         current_ts = self.coordinator.last_update_success_time
         if current_ts and current_ts != self._last_write_coordinator_ts:
             states = self.historical_states
@@ -101,9 +98,32 @@ class HistoricalSensorMixin(HistoricalSensor):
                 self._last_write_coordinator_ts = current_ts
                 _LOGGER.warning(
                     f"{getattr(self, 'entity_id', '?')}: "
-                    f"writing {len(states)} historical states"
+                    f"writing {len(states)} historical states to statistics"
                 )
-                self.hass.async_create_task(self.async_write_ha_historical_states())
+                self.hass.async_create_task(
+                    self._async_write_statistics_only()
+                )
+
+    async def _async_write_statistics_only(self) -> None:
+        """Write only statistics, skip _write_recorder_states entirely.
+
+        The library's _write_recorder_states uses deprecated HA APIs
+        (_friendly_name_internal, device_state_attributes) and causes
+        StaleDataError. We only need statistics for the Energy Dashboard.
+        """
+        hist_states = self.historical_states
+        if not hist_states:
+            return
+        try:
+            await self._async_write_statistics(hist_states)
+            _LOGGER.warning(
+                f"{getattr(self, 'entity_id', '?')}: statistics written OK"
+            )
+        except Exception as e:
+            _LOGGER.warning(
+                f"{getattr(self, 'entity_id', '?')}: "
+                f"error writing statistics: {e!r}"
+            )
 
     def async_update_historical(self) -> None:
         pass
