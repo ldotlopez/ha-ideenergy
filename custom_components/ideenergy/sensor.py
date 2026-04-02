@@ -110,8 +110,16 @@ class HistoricalSensorMixin(HistoricalSensor):
                     f"writing {len(states)} historical states"
                 )
                 self.hass.async_create_task(
-                    self.async_write_ha_historical_states()
+                    self._safe_write_historical()
                 )
+
+    async def _safe_write_historical(self) -> None:
+        entity_id = getattr(self, "entity_id", "?")
+        try:
+            await self.async_write_ha_historical_states()
+            _LOGGER.warning(f"{entity_id}: write completed OK")
+        except Exception as e:
+            _LOGGER.warning(f"{entity_id}: write FAILED: {e!r}")
 
     def async_update_historical(self) -> None:
         pass
