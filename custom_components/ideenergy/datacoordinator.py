@@ -135,6 +135,29 @@ class IDeCoordinator(DataUpdateCoordinator):
         data = self.data | updated_data
         return data
 
+    async def _ensure_session(self) -> None:
+        """Ensure we have a valid session, preferring renewal over fresh login.
+
+        This reduces the number of full logins, avoiding i-DE's 2FA trigger
+        (enforced after ~6 logins per week).
+        """
+        if self.api.is_logged:
+            # Session still valid locally, try to renew it server-side
+            try:
+                session_info = await self.api.renew_session()
+                if session_info.get("usSes"):
+                    # Server confirmed session is alive, refresh local timestamp
+                    self.api._login_ts = datetime.now()
+                    _LOGGER.debug("session renewed successfully")
+                    return
+            except Exception:
+                _LOGGER.debug("session renewal failed, will try fresh login")
+
+        # Session expired or renewal failed — full login required
+        self.api._login_ts = None
+        await self.api.login()
+        _LOGGER.debug("fresh login completed")
+
     async def _async_update_data_raw(
         self, datasets: DataSetType = DataSetType.ALL, now: datetime | None = None
     ) -> dict[str, Any]:
@@ -146,6 +169,12 @@ class IDeCoordinator(DataUpdateCoordinator):
         requested = (x for x in requested if x is not DataSetType.ALL)
         requested = (x for x in requested if x & datasets)
         requested = list(requested)  # type: ignore[assignment]
+
+        # Ensure session is alive before fetching data
+        try:
+            await self._ensure_session()
+        except Exception as e:
+            _LOGGER.debug(f"session setup failed: {e!r}, will try fetching anyway")
 
         data = {}
 
@@ -175,10 +204,10 @@ class IDeCoordinator(DataUpdateCoordinator):
                 continue
 
             except ideenergy.RequestFailedError as e:
-                if e.response.status == 403:
+                if e.response.status in (403, 500):
                     _LOGGER.debug(
-                        f"update error for {dataset.name}: 403 forbidden, "
-                        "forcing re-login and retrying"
+                        f"update error for {dataset.name}: "
+                        f"HTTP {e.response.status}, forcing re-login and retrying"
                     )
                     try:
                         self.api._login_ts = None

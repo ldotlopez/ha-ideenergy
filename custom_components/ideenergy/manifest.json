@@ -14,7 +14,7 @@
   "issue_tracker": "https://github.com/ldotlopez/ha-ideenergy/issues",
   "requirements": [
     "ideenergy>=2.0.0rc1",
-    "homeassistant-historical-sensor==2.0.0"
+    "homeassistant-historical-sensor>=2.0.0rc1"
   ],
   "version": "2025.2.0"
 }

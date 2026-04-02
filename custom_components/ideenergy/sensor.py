@@ -87,9 +87,16 @@ _LOGGER = logging.getLogger(__name__)
 
 
 class HistoricalSensorMixin(HistoricalSensor):
+    _last_historical_data: Any = None
+
     @callback
     def _handle_coordinator_update(self) -> None:
-        self.hass.add_job(self.async_write_ha_historical_states())
+        # Only write historical states when the underlying data has changed,
+        # to avoid duplicate/overlapping state writes that cause StaleDataError
+        current_data = self.historical_states
+        if current_data and current_data != self._last_historical_data:
+            self._last_historical_data = current_data
+            self.hass.async_create_task(self.async_write_ha_historical_states())
 
     def async_update_historical(self) -> None:
         pass
@@ -102,6 +109,13 @@ class StatisticsMixin(HistoricalSensor):
 
     def get_statistic_metadata(self) -> StatisticMetaData:
         meta = super().get_statistic_metadata() | {"has_sum": True}
+
+        try:
+            from homeassistant.components.recorder.statistics import StatisticMeanType
+
+            meta["mean_type"] = StatisticMeanType.NONE
+        except ImportError:
+            pass
 
         return meta
 
