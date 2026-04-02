@@ -87,15 +87,17 @@ _LOGGER = logging.getLogger(__name__)
 
 
 class HistoricalSensorMixin(HistoricalSensor):
-    _last_write_coordinator_ts: datetime | None = None
+    _last_written_data_id: int | None = None
 
     @callback
     def _handle_coordinator_update(self) -> None:
-        current_ts = self.coordinator.last_update_success_time
-        if current_ts and current_ts != self._last_write_coordinator_ts:
+        # Track by data object identity — only write when coordinator
+        # has new data, not on every polling cycle
+        data_id = id(self.coordinator.data)
+        if data_id != self._last_written_data_id:
             states = self.historical_states
             if states:
-                self._last_write_coordinator_ts = current_ts
+                self._last_written_data_id = data_id
                 _LOGGER.warning(
                     f"{getattr(self, 'entity_id', '?')}: "
                     f"writing {len(states)} historical states to statistics"
