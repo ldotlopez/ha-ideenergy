@@ -409,7 +409,9 @@ class HistoricalGeneration(
         return ret
 
 
-class HistoricalPowerDemand(HistoricalSensorMixin, IDeEntity, SensorEntity):
+class HistoricalPowerDemand(
+    StatisticsMixin, HistoricalSensorMixin, IDeEntity, SensorEntity
+):
     I_DE_PLATFORM = PLATFORM
     I_DE_ENTITY_NAME = "Historical Power Demand"
     I_DE_DATA_SETS = [DataSetType.HISTORICAL_POWER_DEMAND]
