@@ -84,7 +84,9 @@ class IDeEntity(CoordinatorEntity):
 
         self.coordinator.register_sensor(self)
 
-        await self.coordinator.async_request_refresh()
+        # Schedule refresh non-blocking to avoid setup timeout
+        # (get_measure talks to the physical ICP meter and can take 30-60s)
+        self.hass.async_create_task(self.coordinator.async_request_refresh())
 
     async def async_will_remove_from_hass(self) -> None:
         self.coordinator.unregister_sensor(self)
