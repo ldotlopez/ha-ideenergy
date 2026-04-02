@@ -87,16 +87,9 @@ _LOGGER = logging.getLogger(__name__)
 
 
 class HistoricalSensorMixin(HistoricalSensor):
-    _last_historical_data: Any = None
-
     @callback
     def _handle_coordinator_update(self) -> None:
-        # Only write historical states when the underlying data has changed,
-        # to avoid duplicate/overlapping state writes that cause StaleDataError
-        current_data = self.historical_states
-        if current_data and current_data != self._last_historical_data:
-            self._last_historical_data = current_data
-            self.hass.async_create_task(self.async_write_ha_historical_states())
+        self.hass.async_create_task(self.async_write_ha_historical_states())
 
     def async_update_historical(self) -> None:
         pass
