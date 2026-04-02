@@ -87,23 +87,23 @@ _LOGGER = logging.getLogger(__name__)
 
 
 class HistoricalSensorMixin(HistoricalSensor):
+    _last_write_coordinator_ts: datetime | None = None
+
     @callback
     def _handle_coordinator_update(self) -> None:
-        self.hass.async_create_task(self._write_historical_with_logging())
-
-    async def _write_historical_with_logging(self) -> None:
-        entity_id = getattr(self, "entity_id", "unknown")
-        states = self.historical_states
-        _LOGGER.warning(
-            f"{entity_id}: writing {len(states)} historical states"
-        )
-        if not states:
-            return
-        try:
-            await self.async_write_ha_historical_states()
-            _LOGGER.warning(f"{entity_id}: historical states written OK")
-        except Exception as e:
-            _LOGGER.warning(f"{entity_id}: error writing historical states: {e!r}")
+        # Only write when the coordinator has actually fetched new data,
+        # not on every polling cycle. This prevents StaleDataError from
+        # rewriting the same states to the recorder.
+        current_ts = self.coordinator.last_update_success_time
+        if current_ts and current_ts != self._last_write_coordinator_ts:
+            states = self.historical_states
+            if states:
+                self._last_write_coordinator_ts = current_ts
+                _LOGGER.warning(
+                    f"{getattr(self, 'entity_id', '?')}: "
+                    f"writing {len(states)} historical states"
+                )
+                self.hass.async_create_task(self.async_write_ha_historical_states())
 
     def async_update_historical(self) -> None:
         pass
