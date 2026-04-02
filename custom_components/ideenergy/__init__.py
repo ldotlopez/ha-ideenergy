@@ -43,7 +43,7 @@ from .const import (
 from .datacoordinator import DataSetType, IDeCoordinator
 from .updates import update_integration
 
-PLATFORMS: list[str] = [Platform.SENSOR]
+PLATFORMS: list[str] = [Platform.SENSOR, Platform.BUTTON]
 
 _LOGGER = logging.getLogger(__name__)
 
