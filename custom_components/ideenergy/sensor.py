@@ -89,10 +89,17 @@ _LOGGER = logging.getLogger(__name__)
 class HistoricalSensorMixin(HistoricalSensor):
     _last_written_data_id: int | None = None
 
+    def _write_recorder_states(self, *args, **kwargs):
+        """No-op: skip writing to the states table.
+
+        The library's original _write_recorder_states uses deprecated HA APIs
+        (_friendly_name_internal, device_state_attributes) and causes
+        StaleDataError. We only need statistics for the Energy Dashboard.
+        """
+        return []
+
     @callback
     def _handle_coordinator_update(self) -> None:
-        # Track by data object identity — only write when coordinator
-        # has new data, not on every polling cycle
         data_id = id(self.coordinator.data)
         if data_id != self._last_written_data_id:
             states = self.historical_states
@@ -100,32 +107,11 @@ class HistoricalSensorMixin(HistoricalSensor):
                 self._last_written_data_id = data_id
                 _LOGGER.warning(
                     f"{getattr(self, 'entity_id', '?')}: "
-                    f"writing {len(states)} historical states to statistics"
+                    f"writing {len(states)} historical states"
                 )
                 self.hass.async_create_task(
-                    self._async_write_statistics_only()
+                    self.async_write_ha_historical_states()
                 )
-
-    async def _async_write_statistics_only(self) -> None:
-        """Write only statistics, skip _write_recorder_states entirely.
-
-        The library's _write_recorder_states uses deprecated HA APIs
-        (_friendly_name_internal, device_state_attributes) and causes
-        StaleDataError. We only need statistics for the Energy Dashboard.
-        """
-        hist_states = self.historical_states
-        if not hist_states:
-            return
-        try:
-            await self._async_write_statistics(hist_states)
-            _LOGGER.warning(
-                f"{getattr(self, 'entity_id', '?')}: statistics written OK"
-            )
-        except Exception as e:
-            _LOGGER.warning(
-                f"{getattr(self, 'entity_id', '?')}: "
-                f"error writing statistics: {e!r}"
-            )
 
     def async_update_historical(self) -> None:
         pass
