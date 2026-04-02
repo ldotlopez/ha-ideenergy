@@ -117,9 +117,12 @@ def _patched_build_attributes(self: Entity, state: Any) -> dict[str, str]:
 
 try:
     import homeassistant_historical_sensor.patches as _hhs_patches
+    import homeassistant_historical_sensor.sensor as _hhs_sensor
 
     _hhs_patches._build_attributes = _patched_build_attributes
     _hhs_patches._stringify_state = _patched_stringify_state
+    # Also patch the already-imported reference in sensor.py
+    _hhs_sensor._build_attributes = _patched_build_attributes
 except Exception:
     pass
 
