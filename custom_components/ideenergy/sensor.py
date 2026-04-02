@@ -368,9 +368,14 @@ class HistoricalConsumption(
         # self._attr_state_class = SensorStateClass.TOTAL
 
     @property
+    def state(self):
+        if (data := self.coordinator.data[DATA_ATTR_HISTORICAL_CONSUMPTION]) is not None:
+            return data.total
+        return None
+
+    @property
     def historical_states(self):
         if (data := self.coordinator.data[DATA_ATTR_HISTORICAL_CONSUMPTION]) is None:
-            # FIXME: This should be None, fix ha-historical-sensor
             return []
 
         ret = historical_states_from_period_values(data.periods)
