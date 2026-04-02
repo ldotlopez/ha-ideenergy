@@ -19,15 +19,32 @@
 import asyncio
 import logging
 import math
+import sys
 from datetime import timedelta
+from typing import Any
 
 import ideenergy
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import CONF_PASSWORD, CONF_USERNAME, Platform
+from homeassistant.const import (
+    ATTR_ASSUMED_STATE,
+    ATTR_ATTRIBUTION,
+    ATTR_DEVICE_CLASS,
+    ATTR_ENTITY_PICTURE,
+    ATTR_FRIENDLY_NAME,
+    ATTR_ICON,
+    ATTR_SUPPORTED_FEATURES,
+    ATTR_UNIT_OF_MEASUREMENT,
+    CONF_PASSWORD,
+    CONF_USERNAME,
+    STATE_UNAVAILABLE,
+    STATE_UNKNOWN,
+    UnitOfTemperature,
+    Platform,
+)
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryNotReady
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
-from homeassistant.helpers.entity import DeviceInfo
+from homeassistant.helpers.entity import DeviceInfo, Entity
 
 from .barrier import TimeDeltaBarrier, TimeWindowBarrier  # NoopBarrier,
 from .const import (
@@ -42,6 +59,69 @@ from .const import (
 )
 from .datacoordinator import DataSetType, IDeCoordinator
 from .updates import update_integration
+
+# --- Monkey-patch homeassistant_historical_sensor for modern HA compatibility ---
+# The installed version uses _friendly_name_internal() and device_state_attributes
+# which have been removed in recent HA versions.
+
+_FLOAT_PRECISION = abs(int(math.floor(math.log10(abs(sys.float_info.epsilon))))) - 1
+
+
+def _patched_stringify_state(self: Entity, state: Any) -> str:
+    if not self.available:
+        return STATE_UNAVAILABLE
+    if state is None:
+        return STATE_UNKNOWN
+    if isinstance(state, float):
+        return f"{state:.{_FLOAT_PRECISION}}"
+    return str(state)
+
+
+def _patched_build_attributes(self: Entity, state: Any) -> dict[str, str]:
+    attr = self.capability_attributes
+    attr = dict(attr) if attr else {}
+
+    state = _patched_stringify_state(self, state)
+    if self.available:
+        attr.update(self.state_attributes or {})
+        attr.update(self.extra_state_attributes or {})
+
+    unit_of_measurement = self.unit_of_measurement
+    if unit_of_measurement is not None:
+        attr[ATTR_UNIT_OF_MEASUREMENT] = unit_of_measurement
+
+    entry = self.registry_entry
+    if (name := (entry and entry.name) or self.name) is not None:
+        attr[ATTR_FRIENDLY_NAME] = name
+
+    if (icon := (entry and entry.icon) or self.icon) is not None:
+        attr[ATTR_ICON] = icon
+
+    if (entity_picture := self.entity_picture) is not None:
+        attr[ATTR_ENTITY_PICTURE] = entity_picture
+
+    if assumed_state := self.assumed_state:
+        attr[ATTR_ASSUMED_STATE] = assumed_state
+
+    if (supported_features := self.supported_features) is not None:
+        attr[ATTR_SUPPORTED_FEATURES] = supported_features
+
+    if (device_class := self.device_class) is not None:
+        attr[ATTR_DEVICE_CLASS] = str(device_class)
+
+    if (attribution := self.attribution) is not None:
+        attr[ATTR_ATTRIBUTION] = attribution
+
+    return attr
+
+
+try:
+    import homeassistant_historical_sensor.patches as _hhs_patches
+
+    _hhs_patches._build_attributes = _patched_build_attributes
+    _hhs_patches._stringify_state = _patched_stringify_state
+except Exception:
+    pass
 
 PLATFORMS: list[str] = [Platform.SENSOR, Platform.BUTTON]
 
