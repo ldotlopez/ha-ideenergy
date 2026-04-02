@@ -89,7 +89,21 @@ _LOGGER = logging.getLogger(__name__)
 class HistoricalSensorMixin(HistoricalSensor):
     @callback
     def _handle_coordinator_update(self) -> None:
-        self.hass.async_create_task(self.async_write_ha_historical_states())
+        self.hass.async_create_task(self._write_historical_with_logging())
+
+    async def _write_historical_with_logging(self) -> None:
+        entity_id = getattr(self, "entity_id", "unknown")
+        states = self.historical_states
+        _LOGGER.warning(
+            f"{entity_id}: writing {len(states)} historical states"
+        )
+        if not states:
+            return
+        try:
+            await self.async_write_ha_historical_states()
+            _LOGGER.warning(f"{entity_id}: historical states written OK")
+        except Exception as e:
+            _LOGGER.warning(f"{entity_id}: error writing historical states: {e!r}")
 
     def async_update_historical(self) -> None:
         pass
