@@ -205,7 +205,7 @@ class IDeCoordinator(DataUpdateCoordinator):
 
             except ideenergy.RequestFailedError as e:
                 if e.response.status in (403, 500):
-                    _LOGGER.warning(
+                    _LOGGER.debug(
                         f"update error for {dataset.name}: "
                         f"HTTP {e.response.status}, forcing re-login and retrying"
                     )
@@ -240,7 +240,7 @@ class IDeCoordinator(DataUpdateCoordinator):
 
             self.barriers[dataset].success()
 
-            _LOGGER.warning(f"update OK for {dataset.name}")
+            _LOGGER.debug(f"update OK for {dataset.name}")
 
         # delay = random.randint(DELAY_MIN_SECONDS * 10, DELAY_MAX_SECONDS * 10) / 10
         # _LOGGER.debug(f"  → Random delay: {delay} seconds")

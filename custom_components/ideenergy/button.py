@@ -29,7 +29,7 @@ class ForceUpdateButton(ButtonEntity):
         )
 
     async def async_press(self) -> None:
-        _LOGGER.warning("Force data update requested, resetting all barriers")
+        _LOGGER.debug("Force data update requested, resetting all barriers")
 
         for ds_type, barrier in self._coordinator.barriers.items():
             if hasattr(barrier, "_last_success"):

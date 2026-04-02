@@ -105,7 +105,7 @@ class HistoricalSensorMixin(HistoricalSensor):
             states = self.historical_states
             if states:
                 self._last_written_data_id = data_id
-                _LOGGER.warning(
+                _LOGGER.debug(
                     f"{getattr(self, 'entity_id', '?')}: "
                     f"writing {len(states)} historical states"
                 )
@@ -117,9 +117,9 @@ class HistoricalSensorMixin(HistoricalSensor):
         entity_id = getattr(self, "entity_id", "?")
         try:
             await self.async_write_ha_historical_states()
-            _LOGGER.warning(f"{entity_id}: write completed OK")
+            _LOGGER.debug(f"{entity_id}: historical states written OK")
         except Exception as e:
-            _LOGGER.warning(f"{entity_id}: write FAILED: {e!r}")
+            _LOGGER.warning(f"{entity_id}: error writing historical states: {e!r}")
 
     def async_update_historical(self) -> None:
         pass
@@ -237,7 +237,7 @@ class StatisticsMixin(HistoricalSensor):
             dt_util.utc_from_timestamp(latest.get("start", 0) if latest else 0)
         )
 
-        _LOGGER.warning(
+        _LOGGER.debug(
             f"{self.statistic_id}: "
             f"calculating statistics: {len(hist_states)} states, "
             f"base_accumulated={total_accumulated}, "
@@ -268,7 +268,7 @@ class StatisticsMixin(HistoricalSensor):
                 )
             )
 
-        _LOGGER.warning(
+        _LOGGER.debug(
             f"{self.statistic_id}: calculated {len(ret)} statistic points"
         )
 
