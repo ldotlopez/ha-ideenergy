@@ -249,6 +249,12 @@ class IDeCoordinator(DataUpdateCoordinator):
     async def get_historical_generation_data(self) -> Any:
         end = datetime.today()
         start = end - HISTORICAL_PERIOD_LENGHT
+
+        # Workaround: ensure auth before calling get_historical_generation
+        # because it's missing the @auth_required decorator in ideenergy<=2.0.0rc1
+        if self.api._auto_renew_user_session and not self.api.is_logged:
+            await self.api.login()
+
         data = await self.api.get_historical_generation(start=start, end=end)
 
         return {DATA_ATTR_HISTORICAL_GENERATION: data}
