@@ -198,14 +198,14 @@ class IDeCoordinator(DataUpdateCoordinator):
                 data.update(await self._fetch_dataset(dataset))
 
             except UnicodeDecodeError:
-                _LOGGER.debug(
-                    f"update error for {dataset.name}: invalid encoding. File a bug"
+                _LOGGER.warning(
+                    f"update error for {dataset.name}: invalid encoding"
                 )
                 continue
 
             except ideenergy.RequestFailedError as e:
                 if e.response.status in (403, 500):
-                    _LOGGER.debug(
+                    _LOGGER.warning(
                         f"update error for {dataset.name}: "
                         f"HTTP {e.response.status}, forcing re-login and retrying"
                     )
@@ -214,34 +214,33 @@ class IDeCoordinator(DataUpdateCoordinator):
                         await self.api.login()
                         data.update(await self._fetch_dataset(dataset))
                     except Exception as retry_err:
-                        _LOGGER.debug(
+                        _LOGGER.warning(
                             f"update error for {dataset.name}: "
                             f"retry after re-login also failed: {retry_err!r}"
                         )
                         continue
                 else:
-                    _LOGGER.debug(
+                    _LOGGER.warning(
                         f"update error for {dataset.name}: "
-                        + f"{e.response.reason} ({e.response.status})"
+                        f"HTTP {e.response.status}"
                     )
                     continue
 
             except ideenergy.CommandError as e:
-                _LOGGER.debug(
+                _LOGGER.warning(
                     f"update error for {dataset.name}: command error from API ({e!r})"
                 )
                 continue
 
             except Exception as e:
-                _LOGGER.debug(
-                    f"update error for {dataset.name}: "
-                    + f"**FIXME** handle {dataset.name} raised exception: {e!r}"
+                _LOGGER.warning(
+                    f"update error for {dataset.name}: {e!r}"
                 )
                 continue
 
             self.barriers[dataset].success()
 
-            _LOGGER.debug(f"update successful for {dataset.name}")
+            _LOGGER.warning(f"update OK for {dataset.name}")
 
         # delay = random.randint(DELAY_MIN_SECONDS * 10, DELAY_MAX_SECONDS * 10) / 10
         # _LOGGER.debug(f"  → Random delay: {delay} seconds")
