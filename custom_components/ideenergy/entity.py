@@ -26,10 +26,14 @@ from homeassistant.components import recorder
 from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from homeassistant.util import slugify
-from homeassistant_historical_sensor.recorderutil import (
-    delete_entity_invalid_states,
-    hass_recorder_session,
-)
+try:
+    from homeassistant_historical_sensor.recorderutil import (
+        delete_entity_invalid_states,
+        hass_recorder_session,
+    )
+except ImportError:
+    delete_entity_invalid_states = None
+    hass_recorder_session = None
 
 SensorType = type["IDeEntity"]
 
@@ -93,6 +97,9 @@ class IDeEntity(CoordinatorEntity):
         await super().async_will_remove_from_hass()
 
     async def async_delete_invalid_states(self) -> int:
+        if delete_entity_invalid_states is None or hass_recorder_session is None:
+            return 0
+
         if getattr(self, "hass", None) is None:
             raise TypeError(f"{self.entity_id} is not added to hass")
 
