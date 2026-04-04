@@ -22,7 +22,10 @@ import sqlalchemy as sa
 from homeassistant.components import recorder
 from homeassistant.components.recorder import db_schema, statistics
 from homeassistant.core import HomeAssistant, dt_util
-from homeassistant_historical_sensor import recorderutil
+try:
+    from homeassistant_historical_sensor import recorderutil
+except ImportError:
+    recorderutil = None
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -30,6 +33,9 @@ _LOGGER = logging.getLogger(__name__)
 async def async_fix_statistics(
     hass: HomeAssistant, statistic_metadata: statistics.StatisticMetaData
 ) -> None:
+    if recorderutil is None:
+        return
+
     def timestamp_as_local(timestamp):
         return dt_util.as_local(dt_util.utc_from_timestamp(timestamp))
 
