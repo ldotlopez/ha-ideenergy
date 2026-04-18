@@ -314,8 +314,12 @@ class IDeEnergyDataCoordinator(DataUpdateCoordinator[IDeEnergyDataCoordinatorDat
     async def _async_save_state_timestamp(
         self, key: str, timestamp: float | None = None
     ) -> None:
-        timestamp = timestamp or dt_util.as_timestamp(dt_util.now())
-        self._config_entry_state.data[key] = timestamp
+        ts = (
+            dt_util.as_timestamp(dt_util.now())
+            if timestamp is None
+            else float(timestamp)
+        )
+        self._config_entry_state.data[key] = ts
         await self._config_entry_state.async_save()
 
     @contextlib.asynccontextmanager
@@ -342,7 +346,8 @@ class IDeEnergyDataCoordinator(DataUpdateCoordinator[IDeEnergyDataCoordinatorDat
         Returns:
             True if not enough time has passed (too recent), False if enough time has passed
         """
-        now_dt = dt_util.now()
+        now_ts = dt_util.as_timestamp(dt_util.now())
+        now_dt = dt_util.as_local(dt_util.utc_from_timestamp(now_ts))
         max_age_seconds = max_age.total_seconds()
 
         try:
@@ -351,20 +356,30 @@ class IDeEnergyDataCoordinator(DataUpdateCoordinator[IDeEnergyDataCoordinatorDat
             LOGGER.debug(f"[{self._client}] {label}: no previous timestamp found")
             return False
 
-        prev_dt = dt_util.as_local(datetime.fromtimestamp(prev_ts))
-        elapsed = now_dt - prev_dt
-        is_too_recent = elapsed.total_seconds() <= max_age_seconds
+        elapsed_seconds = now_ts - prev_ts
+        if elapsed_seconds < 0:
+            prev_dt = dt_util.as_local(dt_util.utc_from_timestamp(prev_ts))
+            skew_seconds = abs(elapsed_seconds)
+            LOGGER.warning(
+                f"[{self._client}] {label}: stored timestamp is in the future "
+                + f"(key={key!r}, now={now_dt}, prev={prev_dt}); "
+                + f"clock skew: {skew_seconds:.0f}s; allowing refresh"
+            )
+            return False
+
+        prev_dt = dt_util.as_local(dt_util.utc_from_timestamp(prev_ts))
+        is_too_recent = elapsed_seconds <= max_age_seconds
 
         if is_too_recent:
             fulfillment_dt = prev_dt + max_age
-            remaining_seconds = max_age_seconds - elapsed.total_seconds()
+            remaining_seconds = max_age_seconds - elapsed_seconds
 
             LOGGER.debug(
                 f"[{self._client}] {label}: too recent - "
-                f"last check: {prev_dt.isoformat()}, "
-                f"required interval: {max_age}, "
+                f"last check: {prev_dt}, "
+                f"required interval: {max_age_seconds:.0f}s, "
                 f"remaining time: {remaining_seconds:.0f}s "
-                f"(will be ready at {fulfillment_dt.isoformat()})"
+                f"(will be ready at {fulfillment_dt})"
             )
 
         return is_too_recent
