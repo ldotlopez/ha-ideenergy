@@ -187,6 +187,23 @@ class IDeEnergyDataCoordinator(DataUpdateCoordinator[IDeEnergyDataCoordinatorDat
         data = self.data | {k: v for k, v in updated_data.items() if v is not None}
         return data
 
+    async def async_reconnect_icp(self) -> dict:
+        """Request ICP reconnection using the current authenticated session."""
+        try:
+            data = await self._client.reconnect_icp()
+        except ideenergy.RequestFailedError as exc:
+            body = await exc.response.text()
+            LOGGER.error(
+                "[%s] ICP reconnection failed (status=%s, body=%r)",
+                self._client,
+                exc.response.status,
+                body,
+            )
+            raise
+
+        LOGGER.info("[%s] ICP reconnection requested: %r", self._client, data)
+        return data
+
     async def _async_get_direct_reading_data(self) -> dict[str, int | float]:
         if self._state_is_too_recent_with_debug(
             key=DIRECT_READING_LAST_SUCCESS_STORED_STATE_KEY,

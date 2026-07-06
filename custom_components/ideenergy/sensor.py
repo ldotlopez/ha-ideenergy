@@ -35,7 +35,6 @@ from homeassistant.core import HomeAssistant, callback, dt_util
 from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
-from homeassistant.util import slugify
 from homeassistant_historical_sensor import (
     HistoricalSensor,
     HistoricalState,
@@ -47,7 +46,7 @@ from .coordinator import (
     IDeEnergyCoordinatorDataSet,
     IDeEnergyDataCoordinator,
 )
-from .data import IntegrationIDeEnergyConfigEntry
+from .data import IntegrationIDeEnergyConfigEntry, build_entity_unique_id
 
 PLATFORM = "sensor"
 
@@ -72,7 +71,7 @@ class IDeEnergySensor(CoordinatorEntity, HistoricalSensor, SensorEntity):
         self._attr_name = self.I_DE_ENTITY_NAME
         self._attr_device_info = device_info
 
-        self._attr_unique_id = _build_entity_unique_id(
+        self._attr_unique_id = build_entity_unique_id(
             device_info, self.I_DE_ENTITY_NAME
         )
 
@@ -80,9 +79,7 @@ class IDeEnergySensor(CoordinatorEntity, HistoricalSensor, SensorEntity):
 
     @cached_property
     def unique_id(self) -> str:
-        cups = dict(self.device_info["identifiers"])["cups"]
-        name = self.I_DE_ENTITY_NAME
-        return slugify(f"{cups}-{name}", separator="-")
+        return build_entity_unique_id(self.device_info, self.I_DE_ENTITY_NAME)
 
     # ==
     # Entity
@@ -236,7 +233,7 @@ class AccumulatedConsumption(RestoreSensor, CoordinatorEntity, SensorEntity):
 
         self._attr_has_entity_name = True
         self._attr_name = self.I_DE_ENTITY_NAME
-        self._attr_unique_id = _build_entity_unique_id(
+        self._attr_unique_id = build_entity_unique_id(
             device_info, self.I_DE_ENTITY_NAME
         )
         self._attr_device_class = SensorDeviceClass.ENERGY
@@ -369,8 +366,3 @@ async def async_setup_entry(
             for IDeClass in IDeClasses
         ]
     )
-
-
-def _build_entity_unique_id(device_info: DeviceInfo, entity_unique_name: str) -> str:
-    cups = dict(device_info["identifiers"])["cups"]
-    return slugify(f"{cups}-{entity_unique_name}", separator="-")

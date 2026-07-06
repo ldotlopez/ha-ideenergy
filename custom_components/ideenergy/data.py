@@ -22,6 +22,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from homeassistant.helpers.entity import DeviceInfo
+from homeassistant.util import slugify
 
 if TYPE_CHECKING:
     # from ideenergy import Client
@@ -44,3 +45,8 @@ class IntegrationIDeEnergyRunTimeData:
     coordinator: IDeEnergyDataCoordinator
     device_info: DeviceInfo
     integration: Integration
+
+
+def build_entity_unique_id(device_info: DeviceInfo, entity_unique_name: str) -> str:
+    cups = dict(device_info["identifiers"])["cups"]
+    return slugify(f"{cups}-{entity_unique_name}", separator="-")

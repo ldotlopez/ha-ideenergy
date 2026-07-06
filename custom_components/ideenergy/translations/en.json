@@ -17,5 +17,12 @@
         }
       }
     }
+  },
+  "entity": {
+    "button": {
+      "reconnect_icp": {
+        "name": "Reconnect ICP"
+      }
+    }
   }
 }
