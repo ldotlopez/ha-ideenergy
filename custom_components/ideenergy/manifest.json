@@ -16,7 +16,7 @@
   "iot_class": "cloud_polling",
   "issue_tracker": "https://github.com/ldotlopez/ha-ideenergy/issues",
   "requirements": [
-    "ideenergy>=2.0.1.dev3",
+    "ideenergy>=2.0.1.dev4",
     "homeassistant-historical-sensor==3.0.0a4"
   ],
   "version": "3.0.0a1"

@@ -25,6 +25,8 @@ This integration requires an **advanced** user profile on i-DE website.
 
 * Accumulated and Instant consumption sensors.
 
+* ICP reconnection button for manually requesting remote reconnection after the limiter trips.
+
 * Historical sensors (both consumption and solar generation) with better (sub-kWh) precision. This data is not realtime and usually has a 24-hour to 48-hour offset.
 
 * Support for multiple contracts (service points).
@@ -104,6 +106,8 @@ It also necessary to have an "Advanced User" profile. Should you not have one al
 
 ## Warnings
 This extension provides an 'historical' sensor to incorporate data from the past into Home Assistant database. For your own safety the sensor is not enabled by default and must be enabled manually.
+
+The ICP reconnection button calls i-DE's remote reconnection endpoint. Press it only when the ICP is actually tripped/down, and avoid sending more than one reconnection request every 2 minutes because i-DE may reject or rate-limit repeated requests.
 
 ☠️ Historic sensor is based on a **high experimental hack** and can broke and/or corrupt your database and/or statistics. **Use at your own risk**.
 

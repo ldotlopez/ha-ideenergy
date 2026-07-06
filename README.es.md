@@ -24,6 +24,8 @@ Require de un usuario **avanzado** en la página web del distribuidor.
 
 * Sensores de consumo instantaneo y acumulado.
 
+* Botón de reconexión de ICP para solicitar manualmente el rearme remoto después de un disparo del limitador.
+
 * Sensores históricos (consumulo y generación solar) con mayor precisión (sub-kWh). Estos datos no son tiempo real y normalmente llevan un retraso de entre 24 y 48 horas.
 
 * Soporte para varios contratos (puntos de servicio).
@@ -102,5 +104,7 @@ A través de custom_components o [HACS](https://hacs.xyz/)
 
 ## Advertencias
 Esta integración provee un sensor 'histórico' que incorpora datos del pasado en la base de datos de Home Assistant. Por su propia seguridad este sensor no está habilitado y debe activarse manualmente.
+
+El botón de reconexión de ICP llama al endpoint de reconexión remota de i-DE. Úselo solo cuando el ICP esté realmente disparado/desconectado, y evite enviar más de una solicitud de reconexión cada 2 minutos porque i-DE puede rechazar o limitar peticiones repetidas.
 
 ☠️ El sensor histórico está basado en un **hack extremadamente experimental** y puede romper y/o corromper su base de datos y/o estadísticas. **Use lo bajo su propio riesgo**.
