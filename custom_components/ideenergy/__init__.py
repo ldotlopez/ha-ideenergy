@@ -32,7 +32,7 @@ from .coordinator import IDeEnergyDataCoordinator
 from .data import IntegrationIDeEnergyConfigEntry, IntegrationIDeEnergyRunTimeData
 from .store import IDeEnergyConfigEntryState
 
-PLATFORMS: list[str] = ["sensor"]
+PLATFORMS: list[str] = ["sensor", "button"]
 
 LOGGER = logging.getLogger(__name__)
 
